@@ -705,7 +705,7 @@ def create_clean_evolution_visualization_with_labels(
             edgecolors="black",
             linewidth=edge_width,
             zorder=5,
-            alpha=alpha,
+            alpha=marker_alpha,
         )
 
         # Add labels
