@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 import openai
 from openai import OpenAI
 import time
+import pickle
 from bertopic import BERTopic
 from sentence_transformers import SentenceTransformer
 from sklearn.feature_extraction.text import CountVectorizer
@@ -21,52 +22,13 @@ from hdbscan import HDBSCAN
 warnings.filterwarnings("ignore")
 
 # ============================================================================
-# CONFIGURABLE PARAMETERS (YOUR SETTINGS)
-# ============================================================================
-
-INPUT_CSV = "/Users/vytautas/Documents/PROJECTS/PMI-2/YT_Keywords/UnitedKingdom_2025/YT/UK_YouTube_comments_2025-10-08_full_processed_POC.csv"
-TEXT_COL = "text"
-DATE_COL = "publishedAt"
-
-OUTPUT_DIR = "topic_evolution_pruned_fixed_output"
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-# Modeling parameters
-EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
-UMAP_N_NEIGHBORS = 15
-UMAP_N_COMPONENTS = 5
-UMAP_METRIC = "cosine"
-
-# HDBSCAN settings
-BASE_MIN_CLUSTER_SIZE = 4
-BASE_MIN_SAMPLES = 1
-
-# Vectorizer settings
-VECTOR_MIN_DF_SAFE = 1
-VECTOR_MAX_DF_SAFE = 0.95
-COUNTVEC_MAX_FEATURES = 170000
-
-# Graph linking thresholds
-TOPIC_EMB_SIM_THRESHOLD = 0.35
-DOC_TO_PREV_TOPIC_THRESHOLD = 0.40
-BRIDGING_THRESHOLD = 0.45
-TOP_TERM_COUNT = 10
-
-# Pruning parameters
-MIN_TOPIC_SIZE_FOR_LINKING = 8
-MAX_TOPICS_FOR_LINKING = 800
-PLOT_TOP_K_PER_MONTH = 40
-EDGE_SIM_PLOT_THRESHOLD = 0.42
-EDGE_TOP_K_PER_SOURCE = 3
-MIN_PROP_DOCS_FOR_EDGE = 5
-DOC_SIM_BATCH = 5000
-EPHEMERAL_DOC_COUNT = 6
-
-# ============================================================================
 # OPENAI SETUP
 # ============================================================================
 
+# Load environment variables
 load_dotenv()
+
+# Initialize OpenAI
 openai.api_key = os.getenv("OPENAI_API_KEY")
 if not openai.api_key:
     print(
@@ -76,46 +38,31 @@ if not openai.api_key:
 else:
     USE_OPENAI = True
 
+# System prompt for topic labeling
 TOPIC_LABELING_SYSTEM_PROMPT = """You are an expert at analyzing social media discussions and creating clear, descriptive topic labels. 
-Your task is to generate concise, human-readable topic names based on keywords and sample comments.
+Your task is to generate concise, human-readable topic names based on keywords and sample comments from TikTok.
 
 Guidelines:
 - Create descriptive labels that capture the essence of what people are discussing
 - Use 5-10 words maximum
 - Be specific rather than generic
 - Focus on the main theme or issue being discussed
-- Use natural, conversational language that anyone can understand"""
+- Use natural, conversational language that anyone can understand
+- Avoid using the exact keywords in sequence; instead create a flowing description"""
 
 # ============================================================================
-# LOAD AND PREPARE DATA
+# LOAD YOUR DATA (Assuming you have monthly_data.pkl from previous steps)
 # ============================================================================
 
-print("Loading data from CSV...")
-df = pd.read_csv(INPUT_CSV)
-
-# Convert timestamps
-df[DATE_COL] = pd.to_datetime(df[DATE_COL])
-df["year_month"] = df[DATE_COL].dt.to_period("M")
-
-# Remove empty texts
-df = df[df[TEXT_COL].notna()]
-df = df[df[TEXT_COL].str.strip() != ""]
-
-print(f"Loaded {len(df)} comments")
-print(f"Date range: {df[DATE_COL].min()} to {df[DATE_COL].max()}")
-print(f"Unique months: {df['year_month'].nunique()}")
-
-# Create monthly data
-monthly_data = {}
-for month in df["year_month"].unique():
-    month_df = df[df["year_month"] == month].copy()
-    monthly_data[str(month)] = month_df
+print("Loading monthly data...")
+with open("monthly_data.pkl", "rb") as f:
+    monthly_data = pickle.load(f)
 
 # Initialize embedding model
-embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
+embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
 # ============================================================================
-# STEP 1: RUN TOPIC MODELING WITH YOUR PARAMETERS
+# STEP 1: RUN TOPIC MODELING WITH HDBSCAN
 # ============================================================================
 
 monthly_topics = {}
@@ -124,13 +71,13 @@ monthly_topic_representations = {}
 monthly_outliers = {}
 
 print("\n" + "=" * 60)
-print("RUNNING TOPIC MODELING WITH SPECIFIED PARAMETERS")
+print("RUNNING TOPIC MODELING WITH HDBSCAN")
 print("=" * 60)
 
 for month_str in sorted(monthly_data.keys()):
     print(f"\nProcessing month: {month_str}")
     month_df = monthly_data[month_str]
-    texts = month_df[TEXT_COL].tolist()
+    texts = month_df["processed_text"].tolist()
 
     if len(texts) < 10:
         print(f"  ⚠️ Skipping {month_str}: Only {len(texts)} comments")
@@ -138,35 +85,44 @@ for month_str in sorted(monthly_data.keys()):
 
     n_docs = len(texts)
 
-    # Scale min_cluster_size based on document count but use your base setting
-    adjusted_min_cluster_size = max(BASE_MIN_CLUSTER_SIZE, int(n_docs * 0.01))
-
-    # Configure HDBSCAN with your parameters
+    # Configure HDBSCAN with adaptive parameters
     hdbscan_model = HDBSCAN(
-        min_cluster_size=adjusted_min_cluster_size,
-        min_samples=BASE_MIN_SAMPLES,
+        min_cluster_size=max(40, min(100, int(n_docs * 0.05))),
+        min_samples=min(25, max(5, int(n_docs * 0.01))),
         metric="euclidean",
         cluster_selection_method="eom",
+        cluster_selection_epsilon=0.1,
         prediction_data=True,
     )
 
-    # Configure UMAP with your exact parameters
+    # Configure UMAP
     umap_model = UMAP(
-        n_neighbors=min(UMAP_N_NEIGHBORS, n_docs - 1),
-        n_components=UMAP_N_COMPONENTS,
-        min_dist=0.0,
-        metric=UMAP_METRIC,
+        n_neighbors=min(35, max(15, int(n_docs * 0.01))),
+        n_components=15,
+        min_dist=0.1,
+        metric="cosine",
         random_state=42,
     )
 
-    # Configure vectorizer with your exact parameters
+    # Configure vectorizer
+    if n_docs < 100:
+        min_df_value = 2
+    elif n_docs < 500:
+        min_df_value = 3
+    elif n_docs < 1000:
+        min_df_value = 5
+    else:
+        min_df_value = 10
+
     vectorizer_model = CountVectorizer(
         ngram_range=(1, 1),
-        min_df=VECTOR_MIN_DF_SAFE,
-        max_df=VECTOR_MAX_DF_SAFE,
-        max_features=COUNTVEC_MAX_FEATURES,
+        min_df=min_df_value,
+        max_df=0.95,
+        max_features=10000,
         stop_words="english",
     )
+
+    min_topic_size_value = max(23, min(50, int(n_docs * 0.03)))
 
     # Create BERTopic model
     topic_model = BERTopic(
@@ -174,7 +130,7 @@ for month_str in sorted(monthly_data.keys()):
         umap_model=umap_model,
         hdbscan_model=hdbscan_model,
         vectorizer_model=vectorizer_model,
-        min_topic_size=MIN_TOPIC_SIZE_FOR_LINKING,
+        min_topic_size=min_topic_size_value,
         nr_topics="auto",
         calculate_probabilities=False,
         verbose=False,
@@ -193,27 +149,14 @@ for month_str in sorted(monthly_data.keys()):
             "outlier_texts": [texts[i] for i, t in enumerate(topics) if t == -1][:10],
         }
 
-        # Get topic representations (limit to top topics if too many)
+        # Get topic representations
         topic_representations = {}
-        valid_topics = [t for t in topic_info["Topic"].unique() if t != -1]
-
-        # Sort by count and limit if needed
-        if len(valid_topics) > MAX_TOPICS_FOR_LINKING:
-            topic_counts = (
-                topic_info[topic_info["Topic"] != -1]
-                .set_index("Topic")["Count"]
-                .to_dict()
-            )
-            valid_topics = sorted(
-                valid_topics, key=lambda x: topic_counts.get(x, 0), reverse=True
-            )[:MAX_TOPICS_FOR_LINKING]
-
-        for topic_id in valid_topics:
-            topic_words = topic_model.get_topic(topic_id)
-            if topic_words:
+        for topic_id in topic_info["Topic"].unique():
+            if topic_id != -1:
+                topic_words = topic_model.get_topic(topic_id)
                 topic_representations[topic_id] = {
-                    "words": [word for word, score in topic_words[:TOP_TERM_COUNT]],
-                    "scores": [score for word, score in topic_words[:TOP_TERM_COUNT]],
+                    "words": [word for word, score in topic_words[:10]],
+                    "scores": [score for word, score in topic_words[:10]],
                 }
 
         monthly_topics[month_str] = {
@@ -224,17 +167,16 @@ for month_str in sorted(monthly_data.keys()):
         monthly_topic_info[month_str] = topic_info
         monthly_topic_representations[month_str] = topic_representations
 
-        n_topics = len(valid_topics)
-        print(f"  ✓ Found {n_topics} topics (after filtering)")
+        n_topics = len(topic_info) - 1
+        print(f"  ✓ Found {n_topics} topics")
         print(f"  ✓ Outliers: {n_outliers} ({outlier_percentage:.1f}%)")
-        print(f"  ✓ Min cluster size: {adjusted_min_cluster_size}")
 
     except Exception as e:
         print(f"  ❌ Error: {str(e)}")
         continue
 
 # ============================================================================
-# STEP 2: CALCULATE TOPIC EVOLUTION WITH YOUR THRESHOLDS
+# STEP 2: CALCULATE TOPIC EVOLUTION
 # ============================================================================
 
 
@@ -297,35 +239,26 @@ for i in range(len(sorted_months) - 1):
     for t1_idx, t1_id in enumerate(topics1.keys()):
         for t2_idx, t2_id in enumerate(topics2.keys()):
             sim = similarity_matrix[t1_idx, t2_idx]
-            # Use your thresholds
-            if sim >= TOPIC_EMB_SIM_THRESHOLD:
+            if sim > 0:
                 connections.append(
                     {
                         "from_topic": t1_id,
                         "to_topic": t2_id,
                         "similarity": sim,
-                        "strong_connection": sim >= BRIDGING_THRESHOLD,
+                        "strong_connection": sim >= 0.5,
                     }
                 )
 
-    # Limit connections per source topic
-    filtered_connections = []
-    for t1_id in topics1.keys():
-        t1_connections = [c for c in connections if c["from_topic"] == t1_id]
-        t1_connections = sorted(
-            t1_connections, key=lambda x: x["similarity"], reverse=True
-        )[:EDGE_TOP_K_PER_SOURCE]
-        filtered_connections.extend(t1_connections)
-
+    connections = sorted(connections, key=lambda x: x["similarity"], reverse=True)
     topic_evolution[f"{month1}->{month2}"] = {
         "similarity_matrix": similarity_matrix,
-        "connections": filtered_connections,
+        "connections": connections,
         "from_month": month1,
         "to_month": month2,
     }
 
 # ============================================================================
-# STEP 3: BUILD TOPIC NETWORK
+# STEP 3: BUILD TOPIC NETWORK WITH SPLITS/MERGES
 # ============================================================================
 
 
@@ -334,7 +267,7 @@ class ImprovedTopicEvolutionNetwork:
         self,
         monthly_representations,
         topic_evolution,
-        similarity_threshold=BRIDGING_THRESHOLD,
+        similarity_threshold=0.5,
         min_branch_length=2,
     ):
         self.monthly_representations = monthly_representations
@@ -347,42 +280,20 @@ class ImprovedTopicEvolutionNetwork:
     def build_evolution_graph(self):
         sorted_months = sorted(self.monthly_representations.keys())
 
-        # Add nodes (limit to top K per month for visualization)
         for month in sorted_months:
-            if month in monthly_topic_info:
-                topic_counts = (
-                    monthly_topic_info[month][monthly_topic_info[month]["Topic"] != -1]
-                    .set_index("Topic")["Count"]
-                    .to_dict()
-                )
-                top_topics = sorted(
-                    self.monthly_representations[month].keys(),
-                    key=lambda x: topic_counts.get(x, 0),
-                    reverse=True,
-                )[:PLOT_TOP_K_PER_MONTH]
+            for topic_id in self.monthly_representations[month].keys():
+                node_id = f"{month}_{topic_id}"
+                self.graph.add_node(node_id, month=month, topic_id=topic_id)
 
-                for topic_id in top_topics:
-                    node_id = f"{month}_{topic_id}"
-                    self.graph.add_node(
-                        node_id,
-                        month=month,
-                        topic_id=topic_id,
-                        doc_count=topic_counts.get(topic_id, 0),
-                    )
-
-        # Add edges (using filtered connections)
         for evolution_key, evolution_data in self.topic_evolution.items():
             from_month, to_month = evolution_key.split("->")
             for conn in evolution_data["connections"]:
-                # Check if both nodes are in our graph
-                from_node = f"{from_month}_{conn['from_topic']}"
-                to_node = f"{to_month}_{conn['to_topic']}"
-
-                if from_node in self.graph.nodes() and to_node in self.graph.nodes():
-                    if conn["similarity"] >= EDGE_SIM_PLOT_THRESHOLD:
-                        self.graph.add_edge(
-                            from_node, to_node, similarity=conn["similarity"]
-                        )
+                if conn["strong_connection"]:
+                    from_node = f"{from_month}_{conn['from_topic']}"
+                    to_node = f"{to_month}_{conn['to_topic']}"
+                    self.graph.add_edge(
+                        from_node, to_node, similarity=conn["similarity"]
+                    )
         return self.graph
 
     def _trace_path_length(self, start_node, visited=None):
@@ -472,11 +383,7 @@ class ImprovedTopicEvolutionNetwork:
                     if substantial_branches:
                         current = substantial_branches[0][0]
                     else:
-                        current = (
-                            max(branch_lengths, key=lambda x: x[1])[0]
-                            if branch_lengths
-                            else None
-                        )
+                        current = max(branch_lengths, key=lambda x: x[1])[0]
                 else:
                     chain["is_split"] = True
                     best_successor = None
@@ -526,7 +433,7 @@ print("=" * 60)
 network = ImprovedTopicEvolutionNetwork(
     monthly_representations=monthly_topic_representations,
     topic_evolution=topic_evolution,
-    similarity_threshold=BRIDGING_THRESHOLD,
+    similarity_threshold=0.5,
     min_branch_length=2,
 )
 
@@ -539,13 +446,13 @@ filtered_chains = network.build_filtered_chains()
 print(f"✓ Created {len(filtered_chains)} chains")
 
 # ============================================================================
-# STEP 4: ENHANCE WITH OPENAI
+# STEP 4: ENHANCE WITH OPENAI (if available)
 # ============================================================================
 
 
 def call_openai_for_topic_label(keywords, sample_comments, max_retries=3):
     if not USE_OPENAI:
-        return f"{', '.join(keywords[:3])}"
+        return f"{', '.join(keywords[:3])} discussion"
 
     user_prompt = f"""Based on these topic keywords and sample comments, create a clear, descriptive topic label.
 
@@ -555,7 +462,7 @@ Sample Comments from this topic:
 """
 
     for i, comment in enumerate(sample_comments[:5], 1):
-        comment_preview = comment[:150] + "..." if len(comment) > 150 else comment
+        comment_preview = comment[:170] + "..." if len(comment) > 150 else comment
         user_prompt += f'{i}. "{comment_preview}"\n'
 
     user_prompt += "\nGenerate a descriptive topic label (5-10 words) that captures what users are discussing:"
@@ -584,7 +491,7 @@ Sample Comments from this topic:
             if attempt < max_retries - 1:
                 time.sleep(2**attempt)
             else:
-                return f"{', '.join(keywords[:3])}"
+                return f"{', '.join(keywords[:3])} discussion"
 
 
 def get_top_comments_for_topic(topic_assignments, documents, topic_id, n_comments=5):
@@ -607,9 +514,6 @@ for month in sorted(monthly_topic_representations.keys()):
     enhanced_monthly_representations[month] = {}
 
     if month not in monthly_topics:
-        enhanced_monthly_representations[month] = monthly_topic_representations[
-            month
-        ].copy()
         continue
 
     topic_assignments = monthly_topics[month]["topics"]
@@ -629,11 +533,18 @@ for month in sorted(monthly_topic_representations.keys()):
         ] = keywords
 
         if USE_OPENAI:
-            time.sleep(0.5)
+            time.sleep(0.5)  # Rate limiting
 
 # ============================================================================
 # STEP 5: CREATE FINAL VISUALIZATION (WITH YOUR IMPROVEMENTS)
 # ============================================================================
+EDGE_SIM_PLOT_THRESHOLD = 0.42  # only plot edges with sim >= this
+# Graph linking thresholds
+TOPIC_EMB_SIM_THRESHOLD = 0.35
+DOC_TO_PREV_TOPIC_THRESHOLD = 0.40
+BRIDGING_THRESHOLD = 0.45
+TOP_TERM_COUNT = 10
+EPHEMERAL_DOC_COUNT = 6
 
 
 def create_clean_evolution_visualization_with_labels(
@@ -994,11 +905,6 @@ def create_clean_evolution_visualization_with_labels(
     plt.tight_layout()
     plt.subplots_adjust(bottom=0.08)  # Add extra space at bottom for x-axis labels
 
-    # Save figure
-    output_path = os.path.join(OUTPUT_DIR, "topic_evolution_visualization.png")
-    plt.savefig(output_path, dpi=300, bbox_inches="tight")
-    print(f"✓ Saved visualization to {output_path}")
-
     return fig
 
 
@@ -1011,10 +917,3 @@ fig = create_clean_evolution_visualization_with_labels(
     network, filtered_chains, enhanced_monthly_representations
 )
 plt.show()
-
-print("\n✅ Complete! Visualization created with all improvements:")
-print("  • Title removed")
-print("  • X-axis dates now visible")
-print("  • SPLIT labels in regular black italic font")
-print("  • Topic names truncated at 55 characters instead of 35")
-print(f"Output saved to: {OUTPUT_DIR}")
