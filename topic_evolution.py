@@ -664,7 +664,7 @@ def create_clean_evolution_visualization_with_labels(
         markers = {
             "start": ("o", 180),
             "end": ("v", 180),
-            "split": ("D", 220),
+            "split": ("s", 140),
             "branch_start": ("o", 160),
             "continue": ("s", 140),
         }
@@ -673,7 +673,7 @@ def create_clean_evolution_visualization_with_labels(
         # Adjust alpha for ephemeral topics
         alpha = 0.5 if info["is_ephemeral"] else 0.9
 
-        node_color = "red" if info["type"] == "split" else color
+        node_color = color
         edge_width = 2 if info["type"] == "branch_start" else 1.5
 
         ax.scatter(
@@ -720,8 +720,8 @@ def create_clean_evolution_visualization_with_labels(
                     xy=(x, y),
                     xytext=(x + 0.3, y + y_offset),
                     fontsize=7,
-                    color=chain_colors.get(info["chain_id"], "gray"),
-                    fontweight="bold",
+                    color="black",
+                    style="italic",
                     alpha=0.9,
                     arrowprops=dict(
                         arrowstyle="->",
@@ -831,8 +831,6 @@ def create_clean_evolution_visualization_with_labels(
 
     # IMPROVEMENT 2: Better x-axis label formatting
     ax.set_xticklabels(months, rotation=45, ha="right", fontsize=9)
-    ax.set_xlabel("Month", fontsize=12, fontweight="bold")
-    ax.set_ylabel("Topic Evolution Chains", fontsize=12, fontweight="bold")
 
     # IMPROVEMENT 1: Remove title completely
     # ax.set_title() - REMOVED
@@ -869,16 +867,6 @@ def create_clean_evolution_visualization_with_labels(
             color="w",
             label="Topic End",
             markerfacecolor="gray",
-            markersize=10,
-            markeredgecolor="black",
-        ),
-        plt.Line2D(
-            [0],
-            [0],
-            marker="D",
-            color="w",
-            label="Split Point",
-            markerfacecolor="red",
             markersize=10,
             markeredgecolor="black",
         ),
