@@ -644,6 +644,23 @@ def create_clean_evolution_visualization_with_labels(
         print("No chains to visualize")
         return None
 
+    # Determine size scaling based on comment/doc counts so nodes encode volume
+    doc_counts = [info["doc_count"] for info in layout.values() if info["doc_count"] > 0]
+    if doc_counts:
+        min_doc_count = min(doc_counts)
+        max_doc_count = max(doc_counts)
+    else:
+        min_doc_count = max_doc_count = 0
+
+    def scaled_size(base_size, doc_count):
+        """Scale marker size smoothly between 0.65x and 1.45x of its base size."""
+        if max_doc_count == min_doc_count:
+            scale = 1.0
+        else:
+            normalized = (doc_count - min_doc_count) / (max_doc_count - min_doc_count)
+            scale = 0.65 + normalized * (1.45 - 0.65)
+        return base_size * scale
+
     # IMPROVEMENT 2: Adjust figure size and margins for better x-axis visibility
     fig, ax = plt.subplots(figsize=(20, max(10, total_rows * 0.5)))
 
@@ -668,7 +685,10 @@ def create_clean_evolution_visualization_with_labels(
             "branch_start": ("o", 160),
             "continue": ("s", 140),
         }
-        marker, size = markers.get(info["type"], ("s", 140))
+        marker, base_size = markers.get(info["type"], ("s", 140))
+
+        # Scale size by monthly comment volume to keep dense topics visually prominent
+        marker_size = scaled_size(base_size, info.get("doc_count", 0))
 
         # Adjust alpha for ephemeral topics
         alpha = 0.5 if info["is_ephemeral"] else 0.9
@@ -679,7 +699,7 @@ def create_clean_evolution_visualization_with_labels(
         ax.scatter(
             x,
             y,
-            s=size,
+            s=marker_size,
             c=[node_color],
             marker=marker,
             edgecolors="black",
