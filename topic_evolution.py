@@ -657,19 +657,9 @@ def create_clean_evolution_visualization_with_labels(
         if max_doc_count == min_doc_count:
             scale = 1.0
         else:
-            doc_value = min(max(doc_count, min_doc_count), max_doc_count)
-            normalized = (doc_value - min_doc_count) / (max_doc_count - min_doc_count)
+            normalized = (doc_count - min_doc_count) / (max_doc_count - min_doc_count)
             scale = 0.65 + normalized * (1.45 - 0.65)
         return base_size * scale
-
-    def scaled_alpha(doc_count):
-        """Return a transparency where low-volume topics look lighter."""
-        min_alpha, max_alpha = 0.35, 0.95
-        if max_doc_count == min_doc_count:
-            return 0.7
-        doc_value = min(max(doc_count, min_doc_count), max_doc_count)
-        normalized = (doc_value - min_doc_count) / (max_doc_count - min_doc_count)
-        return min_alpha + normalized * (max_alpha - min_alpha)
 
     # IMPROVEMENT 2: Adjust figure size and margins for better x-axis visibility
     fig, ax = plt.subplots(figsize=(20, max(10, total_rows * 0.5)))
@@ -700,6 +690,9 @@ def create_clean_evolution_visualization_with_labels(
         # Scale size by monthly comment volume to keep dense topics visually prominent
         marker_size = scaled_size(base_size, info.get("doc_count", 0))
 
+        # Scale size by monthly comment volume to keep dense topics visually prominent
+        marker_size = scaled_size(base_size, info.get("doc_count", 0))
+
         node_color = color
         edge_width = 2 if info["type"] == "branch_start" else 1.5
 
@@ -712,8 +705,7 @@ def create_clean_evolution_visualization_with_labels(
             edgecolors="black",
             linewidth=edge_width,
             zorder=5,
-            # Adjust alpha so markers with more comments appear more opaque
-            alpha=scaled_alpha(info.get("doc_count", 0)),
+            alpha=marker_alpha,
         )
 
         # Add labels
