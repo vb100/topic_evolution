@@ -690,8 +690,8 @@ def create_clean_evolution_visualization_with_labels(
         # Scale size by monthly comment volume to keep dense topics visually prominent
         marker_size = scaled_size(base_size, info.get("doc_count", 0))
 
-        # Adjust alpha for ephemeral topics
-        alpha = 0.5 if info["is_ephemeral"] else 0.9
+        # Scale size by monthly comment volume to keep dense topics visually prominent
+        marker_size = scaled_size(base_size, info.get("doc_count", 0))
 
         node_color = color
         edge_width = 2 if info["type"] == "branch_start" else 1.5
