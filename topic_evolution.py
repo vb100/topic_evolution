@@ -644,6 +644,33 @@ def create_clean_evolution_visualization_with_labels(
         print("No chains to visualize")
         return None
 
+    # Determine size scaling based on comment/doc counts so nodes encode volume
+    doc_counts = [info["doc_count"] for info in layout.values() if info["doc_count"] > 0]
+    if doc_counts:
+        min_doc_count = min(doc_counts)
+        max_doc_count = max(doc_counts)
+    else:
+        min_doc_count = max_doc_count = 0
+
+    def scaled_size(base_size, doc_count):
+        """Scale marker size smoothly between 0.65x and 1.45x of its base size."""
+        if max_doc_count == min_doc_count:
+            scale = 1.0
+        else:
+            doc_value = min(max(doc_count, min_doc_count), max_doc_count)
+            normalized = (doc_value - min_doc_count) / (max_doc_count - min_doc_count)
+            scale = 0.65 + normalized * (1.45 - 0.65)
+        return base_size * scale
+
+    def scaled_alpha(doc_count):
+        """Return a transparency where low-volume topics look lighter."""
+        min_alpha, max_alpha = 0.35, 0.95
+        if max_doc_count == min_doc_count:
+            return 0.7
+        doc_value = min(max(doc_count, min_doc_count), max_doc_count)
+        normalized = (doc_value - min_doc_count) / (max_doc_count - min_doc_count)
+        return min_alpha + normalized * (max_alpha - min_alpha)
+
     # IMPROVEMENT 2: Adjust figure size and margins for better x-axis visibility
     fig, ax = plt.subplots(figsize=(20, max(10, total_rows * 0.5)))
 
@@ -664,28 +691,31 @@ def create_clean_evolution_visualization_with_labels(
         markers = {
             "start": ("o", 180),
             "end": ("v", 180),
-            "split": ("D", 220),
+            "split": ("s", 140),
             "branch_start": ("o", 160),
             "continue": ("s", 140),
         }
-        marker, size = markers.get(info["type"], ("s", 140))
+        marker, base_size = markers.get(info["type"], ("s", 140))
 
-        # Adjust alpha for ephemeral topics
-        alpha = 0.5 if info["is_ephemeral"] else 0.9
+        # Scale size by monthly comment volume to keep dense topics visually prominent
+        marker_size = scaled_size(base_size, info.get("doc_count", 0))
 
-        node_color = "red" if info["type"] == "split" else color
+        # Adjust alpha so markers with more comments appear more opaque
+        marker_alpha = scaled_alpha(info.get("doc_count", 0))
+
+        node_color = color
         edge_width = 2 if info["type"] == "branch_start" else 1.5
 
         ax.scatter(
             x,
             y,
-            s=size,
+            s=marker_size,
             c=[node_color],
             marker=marker,
             edgecolors="black",
             linewidth=edge_width,
             zorder=5,
-            alpha=alpha,
+            alpha=marker_alpha,
         )
 
         # Add labels
@@ -720,8 +750,8 @@ def create_clean_evolution_visualization_with_labels(
                     xy=(x, y),
                     xytext=(x + 0.3, y + y_offset),
                     fontsize=7,
-                    color=chain_colors.get(info["chain_id"], "gray"),
-                    fontweight="bold",
+                    color="black",
+                    style="italic",
                     alpha=0.9,
                     arrowprops=dict(
                         arrowstyle="->",
@@ -831,8 +861,6 @@ def create_clean_evolution_visualization_with_labels(
 
     # IMPROVEMENT 2: Better x-axis label formatting
     ax.set_xticklabels(months, rotation=45, ha="right", fontsize=9)
-    ax.set_xlabel("Month", fontsize=12, fontweight="bold")
-    ax.set_ylabel("Topic Evolution Chains", fontsize=12, fontweight="bold")
 
     # IMPROVEMENT 1: Remove title completely
     # ax.set_title() - REMOVED
@@ -869,16 +897,6 @@ def create_clean_evolution_visualization_with_labels(
             color="w",
             label="Topic End",
             markerfacecolor="gray",
-            markersize=10,
-            markeredgecolor="black",
-        ),
-        plt.Line2D(
-            [0],
-            [0],
-            marker="D",
-            color="w",
-            label="Split Point",
-            markerfacecolor="red",
             markersize=10,
             markeredgecolor="black",
         ),
