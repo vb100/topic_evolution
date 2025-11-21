@@ -87,8 +87,8 @@ for month_str in sorted(monthly_data.keys()):
 
     # Configure HDBSCAN with adaptive parameters
     hdbscan_model = HDBSCAN(
-        min_cluster_size=max(40, min(100, int(n_docs * 0.05))),
-        min_samples=min(25, max(5, int(n_docs * 0.01))),
+        min_cluster_size=max(60, min(150, int(n_docs * 0.08))),
+        min_samples=min(35, max(10, int(n_docs * 0.02))),
         metric="euclidean",
         cluster_selection_method="eom",
         cluster_selection_epsilon=0.1,
@@ -122,7 +122,7 @@ for month_str in sorted(monthly_data.keys()):
         stop_words="english",
     )
 
-    min_topic_size_value = max(23, min(50, int(n_docs * 0.03)))
+    min_topic_size_value = max(40, min(80, int(n_docs * 0.06)))
 
     # Create BERTopic model
     topic_model = BERTopic(
