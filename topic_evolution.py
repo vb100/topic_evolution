@@ -545,6 +545,7 @@ DOC_TO_PREV_TOPIC_THRESHOLD = 0.40
 BRIDGING_THRESHOLD = 0.45
 TOP_TERM_COUNT = 10
 EPHEMERAL_DOC_COUNT = 6
+ROW_SPACING = 1.25
 
 
 def create_clean_evolution_visualization_with_labels(
@@ -600,8 +601,10 @@ def create_clean_evolution_visualization_with_labels(
                         if not topic_row.empty:
                             doc_count = topic_row.iloc[0]["Count"]
 
+                    y_coord = y_pos * ROW_SPACING
+
                     layout[key] = {
-                        "y": y_pos,
+                        "y": y_coord,
                         "chain_id": chain["chain_id"],
                         "type": node_type,
                         "words": node.get("words", []),
@@ -615,7 +618,7 @@ def create_clean_evolution_visualization_with_labels(
                         split_info.append(
                             {
                                 "key": key,
-                                "y": y_pos,
+                                "y": y_coord,
                                 "words": node.get("words", []),
                                 "n_branches": len(part["branches"]),
                             }
@@ -645,7 +648,8 @@ def create_clean_evolution_visualization_with_labels(
         return None
 
     # IMPROVEMENT 2: Adjust figure size and margins for better x-axis visibility
-    fig, ax = plt.subplots(figsize=(20, max(10, total_rows * 0.5)))
+    total_height = max(1, total_rows) * ROW_SPACING
+    fig, ax = plt.subplots(figsize=(20, max(10, total_height * 0.5)))
 
     months = sorted(monthly_representations.keys())
     month_positions = {month: i for i, month in enumerate(months)}
@@ -822,7 +826,7 @@ def create_clean_evolution_visualization_with_labels(
             )
 
     ax.set_xlim(-1.5, len(months))
-    ax.set_ylim(-1, total_rows + 1)
+    ax.set_ylim(-ROW_SPACING, total_height + ROW_SPACING)
     ax.set_xticks(range(len(months)))
 
     # IMPROVEMENT 2: Better x-axis label formatting
