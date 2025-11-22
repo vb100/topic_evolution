@@ -245,7 +245,7 @@ for i in range(len(sorted_months) - 1):
                         "from_topic": t1_id,
                         "to_topic": t2_id,
                         "similarity": sim,
-                        "strong_connection": sim >= 0.5,
+                        "strong_connection": sim >= 0.35,
                     }
                 )
 
@@ -433,8 +433,8 @@ print("=" * 60)
 network = ImprovedTopicEvolutionNetwork(
     monthly_representations=monthly_topic_representations,
     topic_evolution=topic_evolution,
-    similarity_threshold=0.5,
-    min_branch_length=2,
+    similarity_threshold=0.35,
+    min_branch_length=1,
 )
 
 graph = network.build_evolution_graph()
