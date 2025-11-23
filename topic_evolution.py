@@ -121,10 +121,16 @@ for month_str in sorted(monthly_data.keys()):
     else:
         min_df_value = 10
 
+    max_df_value = 0.95
+    if max_df_value * n_docs < min_df_value:
+        max_df_value = 1.0
+        if max_df_value * n_docs < min_df_value:
+            min_df_value = 1
+
     vectorizer_model = CountVectorizer(
         ngram_range=(1, 1),
         min_df=min_df_value,
-        max_df=0.95,
+        max_df=max_df_value,
         max_features=10000,
         stop_words="english",
     )
