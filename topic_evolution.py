@@ -567,6 +567,7 @@ BRIDGING_THRESHOLD = 0.45  # Strong link cutoff for “bridge” edges; lowering
 TOP_TERM_COUNT = 10  # Number of top words retained per topic; more terms add nuance but can dilute clarity.
 EPHEMERAL_DOC_COUNT = 6  # Topics with counts at/below this are treated as fleeting; smaller values keep more short-lived nodes visible.
 ROW_SPACING = 1.25
+N_COMMENTS_FOR_BOLD = 1000  # Topics exceeding this total comment count render labels in bold to highlight highly discussed themes.
 
 
     def create_clean_evolution_visualization_with_labels(
@@ -729,7 +730,11 @@ ROW_SPACING = 1.25
             if len(label) > 55:
                 label = label[:52] + "..."
 
-            label_with_count = f"{label} ({chain_comment_totals.get(info['chain_id'], 0)})"
+            total_comments = chain_comment_totals.get(info["chain_id"], 0)
+            label_with_count = f"{label} ({total_comments})"
+            label_font_weight = (
+                "bold" if total_comments > N_COMMENTS_FOR_BOLD else "normal"
+            )
 
             if info["type"] == "start":
                 ax.text(
@@ -740,6 +745,7 @@ ROW_SPACING = 1.25
                     ha="right",
                     va="center",
                     style="italic",
+                    fontweight=label_font_weight,
                     alpha=0.7,
                 )
             elif info["type"] == "branch_start":
@@ -751,6 +757,7 @@ ROW_SPACING = 1.25
                     fontsize=7,
                     color="black",
                     style="italic",
+                    fontweight=label_font_weight,
                     alpha=0.9,
                     arrowprops=dict(
                         arrowstyle="->",
@@ -780,7 +787,11 @@ ROW_SPACING = 1.25
             if len(label) > 55:
                 label = label[:52] + "..."
 
-            label_with_count = f"{label} ({chain_comment_totals.get(chain_id, 0)})"
+            total_comments = chain_comment_totals.get(chain_id, 0)
+            label_with_count = f"{label} ({total_comments})"
+            label_font_weight = (
+                "bold" if total_comments > N_COMMENTS_FOR_BOLD else "normal"
+            )
 
             # IMPROVEMENT 3: Changed color from 'red' to 'black', keeping italic style
             ax.text(
@@ -793,7 +804,7 @@ ROW_SPACING = 1.25
                 style="italic",  # Keep italic style like other labels
                 color="black",  # Changed from 'red' to 'black'
                 alpha=0.7,  # Reduced from 0.8 to match other labels
-                fontweight="normal",  # Changed from 'bold' to 'normal'
+                fontweight=label_font_weight,
                 bbox=dict(
                     boxstyle="round,pad=0.2",
                     facecolor="white",
