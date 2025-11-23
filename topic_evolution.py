@@ -105,6 +105,13 @@ for month_str in sorted(monthly_data.keys()):
     )
 
     # Configure vectorizer
+    # The vectorizer controls how raw text is converted into token counts that feed the
+    # topic model. Tuning the document frequency thresholds helps balance vocabulary
+    # richness against noise: lower values keep rare but meaningful terms, while higher
+    # values filter out infrequent words that can fragment topics. Adjusting the
+    # maximum feature count and n-gram range influences how granularly phrases are
+    # captured, which in turn affects how cohesive and distinguishable the resulting
+    # topics become.
     if n_docs < 100:
         min_df_value = 2
     elif n_docs < 500:
@@ -122,6 +129,8 @@ for month_str in sorted(monthly_data.keys()):
         stop_words="english",
     )
 
+    # Larger values merge narrow clusters so fewer, broader topics emerge; smaller values
+    # allow more granular topics at the risk of over-fragmentation.
     min_topic_size_value = max(40, min(80, int(n_docs * 0.06)))
 
     # Create BERTopic model
@@ -218,7 +227,7 @@ print("\n" + "=" * 60)
 print("CALCULATING TOPIC EVOLUTION")
 print("=" * 60)
 
-topic_evolution = {}
+topic_evolution = {}  # Stores month-to-month topic linkages that drive split/merge detection
 sorted_months = sorted(monthly_topic_representations.keys())
 
 for i in range(len(sorted_months) - 1):
@@ -272,7 +281,13 @@ class ImprovedTopicEvolutionNetwork:
     ):
         self.monthly_representations = monthly_representations
         self.topic_evolution = topic_evolution
+        # similarity_threshold: minimum edge similarity for a topic to continue; lowering it
+        # connects loosely related topics and increases merges/splits, while raising it
+        # enforces stricter continuity and yields cleaner but fewer transitions.
         self.similarity_threshold = similarity_threshold
+        # min_branch_length: shortest allowed offshoot; smaller values keep short-lived
+        # branches visible (more splits), larger values suppress brief detours for a
+        # cleaner mainline.
         self.min_branch_length = min_branch_length
         self.graph = nx.DiGraph()
         self.chains = []
@@ -538,13 +553,13 @@ for month in sorted(monthly_topic_representations.keys()):
 # ============================================================================
 # STEP 5: CREATE FINAL VISUALIZATION (WITH YOUR IMPROVEMENTS)
 # ============================================================================
-EDGE_SIM_PLOT_THRESHOLD = 0.42  # only plot edges with sim >= this
+EDGE_SIM_PLOT_THRESHOLD = 0.42  # Raises/lowers how many moderate links are drawn; higher values reduce clutter but hide weaker ties.
 # Graph linking thresholds
-TOPIC_EMB_SIM_THRESHOLD = 0.35
-DOC_TO_PREV_TOPIC_THRESHOLD = 0.40
-BRIDGING_THRESHOLD = 0.45
-TOP_TERM_COUNT = 10
-EPHEMERAL_DOC_COUNT = 6
+TOPIC_EMB_SIM_THRESHOLD = 0.35  # Embedding similarity needed to treat topics as related; higher tightens merges, lower may over-connect.
+DOC_TO_PREV_TOPIC_THRESHOLD = 0.40  # Minimum doc overlap to keep a topic lineage; increasing it prunes noisy continuations.
+BRIDGING_THRESHOLD = 0.45  # Strong link cutoff for “bridge” edges; lowering shows more strong ties, raising highlights only the most robust.
+TOP_TERM_COUNT = 10  # Number of top words retained per topic; more terms add nuance but can dilute clarity.
+EPHEMERAL_DOC_COUNT = 6  # Topics with counts at/below this are treated as fleeting; smaller values keep more short-lived nodes visible.
 ROW_SPACING = 1.25
 
 
