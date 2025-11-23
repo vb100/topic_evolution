@@ -548,9 +548,9 @@ EPHEMERAL_DOC_COUNT = 6
 ROW_SPACING = 1.25
 
 
-def create_clean_evolution_visualization_with_labels(
-    network, chains, monthly_representations
-):
+    def create_clean_evolution_visualization_with_labels(
+        network, chains, monthly_representations
+    ):
     def calculate_layout(chains):
         layout = {}
         y_position = 0
@@ -647,6 +647,12 @@ def create_clean_evolution_visualization_with_labels(
         print("No chains to visualize")
         return None
 
+    # Precompute total comment counts per chain across its lifetime
+    chain_comment_totals = defaultdict(int)
+    for info in layout.values():
+        if info["chain_id"] is not None:
+            chain_comment_totals[info["chain_id"]] += info.get("doc_count", 0)
+
     # IMPROVEMENT 2: Adjust figure size and margins for better x-axis visibility
     total_height = max(1, total_rows) * ROW_SPACING
     fig, ax = plt.subplots(figsize=(20, max(10, total_height * 0.5)))
@@ -702,11 +708,13 @@ def create_clean_evolution_visualization_with_labels(
             if len(label) > 55:
                 label = label[:52] + "..."
 
+            label_with_count = f"{label} ({chain_comment_totals.get(info['chain_id'], 0)})"
+
             if info["type"] == "start":
                 ax.text(
                     x - 0.1,
                     y,
-                    label,
+                    label_with_count,
                     fontsize=7,
                     ha="right",
                     va="center",
@@ -716,7 +724,7 @@ def create_clean_evolution_visualization_with_labels(
             elif info["type"] == "branch_start":
                 y_offset = 0.15 if info["branch_index"] % 2 == 0 else -0.15
                 ax.annotate(
-                    f"→ {label}",
+                    f"→ {label_with_count}",
                     xy=(x, y),
                     xytext=(x + 0.3, y + y_offset),
                     fontsize=7,
@@ -736,6 +744,7 @@ def create_clean_evolution_visualization_with_labels(
         month, topic_id = split["key"]
         x = month_positions[month]
         y = split["y"]
+        chain_id = layout.get(split["key"], {}).get("chain_id")
 
         if (
             month in monthly_representations
@@ -750,11 +759,13 @@ def create_clean_evolution_visualization_with_labels(
             if len(label) > 55:
                 label = label[:52] + "..."
 
+            label_with_count = f"{label} ({chain_comment_totals.get(chain_id, 0)})"
+
             # IMPROVEMENT 3: Changed color from 'red' to 'black', keeping italic style
             ax.text(
                 x,
                 y + 0.3,
-                f"SPLIT: {label}",
+                f"SPLIT: {label_with_count}",
                 fontsize=7,
                 ha="center",
                 va="bottom",
