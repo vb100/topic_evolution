@@ -949,7 +949,13 @@ def create_clean_evolution_visualization_with_labels(
                     zorder=6,
                 )
             elif info["type"] == "branch_start":
-                y_offset = 0.15 if info["branch_index"] % 2 == 0 else -0.15
+                base_offset = 0.15
+                vertical_nudge = 0.05
+                y_offset = (
+                    base_offset + vertical_nudge
+                    if info["branch_index"] % 2 == 0
+                    else -(base_offset - vertical_nudge)
+                )
                 ax.annotate(
                     f"→ {label_with_count}",
                     xy=(x, y),
