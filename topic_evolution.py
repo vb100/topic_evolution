@@ -153,14 +153,14 @@ for month_str in sorted(monthly_data.keys()):
     # captured, which in turn affects how cohesive and distinguishable the resulting
     # topics become.
 
-def derive_vectorizer_thresholds(texts, n_docs):
+    def derive_vectorizer_thresholds(texts, n_docs):
+        """
+        Dynamically pick min_df/max_df that keep at least one token after pruning by
+        probing term frequencies and relaxing thresholds as needed.
+        """
+
         # Start with the adaptive mins used previously, but be willing to relax them if
         # the vocabulary would be emptied by pruning.
-        # Empty vocabularies occur when preprocessing plus aggressive min_df/max_df cuts
-        # remove every token—for example, very small monthly batches, highly repetitive
-        # text, or spikes in stopwords can leave no terms after pruning. The guard
-        # below progressively relaxes thresholds to keep at least one token so the
-        # vectorizer stays usable.
         if n_docs < 100:
             base_min_df = 2
         elif n_docs < 500:
@@ -714,9 +714,9 @@ ROW_SPACING = 1.25
 N_COMMENTS_FOR_BOLD = 1000  # Topics exceeding this total comment count render labels in bold to highlight highly discussed themes.
 
 
-    def create_clean_evolution_visualization_with_labels(
-        network, chains, monthly_representations
-    ):
+def create_clean_evolution_visualization_with_labels(
+    network, chains, monthly_representations
+):
     def calculate_layout(chains):
         layout = {}
         y_position = 0
