@@ -730,6 +730,7 @@ def create_clean_evolution_visualization_with_labels(
         split_info = []
         lineage_counter = defaultdict(int)
         suppressed_lineages = set()
+        lineage_parent = {}
 
         def prune_short_branches(part):
             retained = []
@@ -838,6 +839,7 @@ def create_clean_evolution_visualization_with_labels(
                             f"{lineage_id or chain['chain_id']}.b"
                             f"{lineage_counter[lineage_id or chain['chain_id']]}"
                         )
+                        lineage_parent[branch_lineage] = lineage_id or chain["chain_id"]
                         process_chain_part(
                             branch,
                             y_position,
@@ -858,9 +860,15 @@ def create_clean_evolution_visualization_with_labels(
             process_chain_part(chain, y_position, lineage_id=chain["chain_id"])
             y_position += 1
 
-        return layout, y_position, split_info, suppressed_lineages
+        return layout, y_position, split_info, suppressed_lineages, lineage_parent
 
-    layout, total_rows, split_info, suppressed_lineages = calculate_layout(chains)
+    (
+        layout,
+        total_rows,
+        split_info,
+        suppressed_lineages,
+        lineage_parent,
+    ) = calculate_layout(chains)
 
     if not layout:
         print("No chains to visualize")
@@ -873,6 +881,16 @@ def create_clean_evolution_visualization_with_labels(
     for info in layout.values():
         if info["lineage_id"] is not None:
             lineage_comment_totals[info["lineage_id"]] += info.get("doc_count", 0)
+
+    # If a branch lineage ends up with the exact same total comment volume as its
+    # parent, treat it as inherited and suppress its labels to avoid duplicating the
+    # parent name in the visualization.
+    for lineage_id, parent_id in lineage_parent.items():
+        if (
+            lineage_comment_totals.get(lineage_id, 0)
+            == lineage_comment_totals.get(parent_id, -1)
+        ):
+            suppressed_lineages.add(lineage_id)
 
     # IMPROVEMENT 2: Adjust figure size and margins for better x-axis visibility
     total_height = max(1, total_rows) * ROW_SPACING
