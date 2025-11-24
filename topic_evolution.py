@@ -130,21 +130,18 @@ for month_str in sorted(monthly_data.keys()):
     else:
         min_df_value = 10
 
-    # Keep the floating 0.95 cap when it is compatible with the minimum; otherwise
-    # fall back to an absolute document count (aligned to the minimum) so the
-    # vectorizer never encounters a conflicting configuration.
+    # Keep the 0.95 cap but convert it to an absolute document ceiling that is
+    # never below min_df, so CountVectorizer always receives compatible integer
+    # thresholds (avoiding "max_df corresponds to < documents than min_df").
     max_df_ratio = 0.95
     max_df_docs = int(np.floor(max_df_ratio * n_docs))
-    if max_df_docs < min_df_value:
-        max_df_value = min_df_value
-        max_df_docs = min_df_value
-    else:
-        max_df_value = max_df_ratio
+    max_df_docs = max(max_df_docs, min_df_value)
+    max_df_value = max_df_docs
 
     print(
         "    Vectorizer thresholds -> min_df: "
         f"{min_df_value} docs, max_df: {max_df_docs} docs "
-        f"(max_df param={max_df_value})"
+        f"(derived from ratio {max_df_ratio})"
     )
 
     vectorizer_model = CountVectorizer(
