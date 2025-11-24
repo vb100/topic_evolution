@@ -88,13 +88,16 @@ def filter_low_information_texts(texts, min_tokens=3):
     filtered = []
     dropped = 0
     for text in texts:
+        raw_text = str(text)
         tokens = [
             tok
-            for tok in re.findall(r"\b\w+\b", str(text).lower())
+            for tok in re.findall(r"\b\w+\b", raw_text.lower())
             if tok not in ENGLISH_STOP_WORDS
         ]
         if len(tokens) >= min_tokens:
-            filtered.append(" ".join(tokens))
+            # Keep the original comment content so embeddings retain context; we only
+            # use the token count to screen out near-empty, stopword-only texts.
+            filtered.append(raw_text)
         else:
             dropped += 1
     return filtered, dropped
@@ -122,16 +125,16 @@ for month_str in sorted(monthly_data.keys()):
         # topic; higher values merge nearby points so you get fewer, broader topics,
         # while lower values allow more granular topics at the risk of extra noise.
         # Bumping this upward reduces the total topic count per month.
-        min_cluster_size=max(80, min(200, int(n_docs * 0.08))),
+        min_cluster_size=max(60, min(160, int(n_docs * 0.05))),
         # min_samples sets how strictly HDBSCAN distinguishes dense clusters from
         # noise; raising it yields sturdier clusters but more outliers, whereas
         # lowering it keeps more points in clusters but can blur topic boundaries.
         # Increasing this in tandem with min_cluster_size prunes fragile clusters so
         # the surviving topics cover more comments each.
-        min_samples=min(40, max(12, int(n_docs * 0.02))),
+        min_samples=min(30, max(10, int(n_docs * 0.01))),
         metric="euclidean",
         cluster_selection_method="eom",
-        cluster_selection_epsilon=0.05,
+        cluster_selection_epsilon=0.1,
         prediction_data=True,
     )
 
@@ -252,7 +255,7 @@ for month_str in sorted(monthly_data.keys()):
     # Larger values merge narrow clusters so fewer, broader topics emerge; smaller values
     # allow more granular topics at the risk of over-fragmentation. Raising these bounds
     # favors a compact set of high-coverage topics instead of many tiny ones.
-    min_topic_size_value = max(60, min(180, int(n_docs * 0.08)))
+    min_topic_size_value = max(50, min(150, int(n_docs * 0.05)))
 
     # Create BERTopic model
     topic_model = BERTopic(
