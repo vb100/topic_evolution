@@ -154,7 +154,9 @@ for month_str in sorted(monthly_data.keys()):
     # values filter out infrequent words that can fragment topics. Adjusting the
     # maximum feature count and n-gram range influences how granularly phrases are
     # captured, which in turn affects how cohesive and distinguishable the resulting
-    # topics become.
+    # topics become. Raising max_features (e.g., from 10k to 15k) allows a larger
+    # vocabulary that can surface finer distinctions between topics but may also add
+    # sparsity and noise if the extra terms are not informative.
 
     def derive_vectorizer_thresholds(texts, n_docs):
         """
@@ -255,7 +257,7 @@ for month_str in sorted(monthly_data.keys()):
     # Larger values merge narrow clusters so fewer, broader topics emerge; smaller values
     # allow more granular topics at the risk of over-fragmentation. Raising these bounds
     # favors a compact set of high-coverage topics instead of many tiny ones.
-    min_topic_size_value = max(50, min(150, int(n_docs * 0.05)))
+    min_topic_size_value = max(60, min(170, int(n_docs * 0.06)))
 
     # Create BERTopic model
     topic_model = BERTopic(
@@ -267,7 +269,7 @@ for month_str in sorted(monthly_data.keys()):
         # Constrain the per-month topic set toward a compact range (roughly 20–25)
         # to emphasize the most dominant themes while discouraging excessive
         # fragmentation.
-        nr_topics=25,
+        nr_topics=22,
         calculate_probabilities=False,
         verbose=False,
     )
@@ -292,7 +294,7 @@ for month_str in sorted(monthly_data.keys()):
                 hdbscan_model=hdbscan_model,
                 vectorizer_model=relaxed_vectorizer,
                 min_topic_size=min_topic_size_value,
-                nr_topics=25,
+                nr_topics=22,
                 calculate_probabilities=False,
                 verbose=False,
             )
@@ -726,6 +728,7 @@ def create_clean_evolution_visualization_with_labels(
         layout = {}
         y_position = 0
         split_info = []
+        lineage_counter = defaultdict(int)
 
         def prune_short_branches(part):
             retained = []
@@ -741,7 +744,12 @@ def create_clean_evolution_visualization_with_labels(
                 continue
 
             def process_chain_part(
-                part, y_pos, parent_end=None, is_branch=False, branch_index=0
+                part,
+                y_pos,
+                parent_end=None,
+                is_branch=False,
+                branch_index=0,
+                lineage_id=None,
             ):
                 nonlocal y_position
 
@@ -786,6 +794,7 @@ def create_clean_evolution_visualization_with_labels(
                     layout[key] = {
                         "y": y_coord,
                         "chain_id": chain["chain_id"],
+                        "lineage_id": lineage_id or chain["chain_id"],
                         "type": node_type,
                         "words": node.get("words", []),
                         "is_branch": is_branch,
@@ -807,16 +816,22 @@ def create_clean_evolution_visualization_with_labels(
                 if part["branches"]:
                     for idx, branch in enumerate(part["branches"]):
                         y_position += 1
+                        lineage_counter[lineage_id or chain["chain_id"]] += 1
+                        branch_lineage = (
+                            f"{lineage_id or chain['chain_id']}.b"
+                            f"{lineage_counter[lineage_id or chain['chain_id']]}"
+                        )
                         process_chain_part(
                             branch,
                             y_position,
                             part["nodes"][-1] if part["nodes"] else None,
                             is_branch=True,
                             branch_index=idx,
+                            lineage_id=branch_lineage,
                         )
                 return y_pos
 
-            process_chain_part(chain, y_position)
+            process_chain_part(chain, y_position, lineage_id=chain["chain_id"])
             y_position += 1
 
         return layout, y_position, split_info
@@ -827,11 +842,13 @@ def create_clean_evolution_visualization_with_labels(
         print("No chains to visualize")
         return None
 
-    # Precompute total comment counts per chain across its lifetime
-    chain_comment_totals = defaultdict(int)
+    # Precompute total comment counts per lineage (main chain and each branch) across
+    # its lifetime so split branches display distinct totals instead of sharing the
+    # parent count.
+    lineage_comment_totals = defaultdict(int)
     for info in layout.values():
-        if info["chain_id"] is not None:
-            chain_comment_totals[info["chain_id"]] += info.get("doc_count", 0)
+        if info["lineage_id"] is not None:
+            lineage_comment_totals[info["lineage_id"]] += info.get("doc_count", 0)
 
     # IMPROVEMENT 2: Adjust figure size and margins for better x-axis visibility
     total_height = max(1, total_rows) * ROW_SPACING
@@ -888,7 +905,7 @@ def create_clean_evolution_visualization_with_labels(
             if len(label) > 55:
                 label = label[:52] + "..."
 
-            total_comments = chain_comment_totals.get(info["chain_id"], 0)
+            total_comments = lineage_comment_totals.get(info["lineage_id"], 0)
             label_with_count = f"{label} ({total_comments})"
             label_font_weight = (
                 "bold" if total_comments > N_COMMENTS_FOR_BOLD else "normal"
@@ -905,6 +922,7 @@ def create_clean_evolution_visualization_with_labels(
                     style="italic",
                     fontweight=label_font_weight,
                     alpha=0.7,
+                    zorder=6,
                 )
             elif info["type"] == "branch_start":
                 y_offset = 0.15 if info["branch_index"] % 2 == 0 else -0.15
@@ -917,6 +935,7 @@ def create_clean_evolution_visualization_with_labels(
                     style="italic",
                     fontweight=label_font_weight,
                     alpha=0.9,
+                    zorder=6,
                     arrowprops=dict(
                         arrowstyle="->",
                         color=chain_colors.get(info["chain_id"], "gray"),
@@ -930,7 +949,9 @@ def create_clean_evolution_visualization_with_labels(
         month, topic_id = split["key"]
         x = month_positions[month]
         y = split["y"]
-        chain_id = layout.get(split["key"], {}).get("chain_id")
+        split_layout = layout.get(split["key"], {})
+        chain_id = split_layout.get("chain_id")
+        lineage_id = split_layout.get("lineage_id")
 
         if (
             month in monthly_representations
@@ -945,7 +966,7 @@ def create_clean_evolution_visualization_with_labels(
             if len(label) > 55:
                 label = label[:52] + "..."
 
-            total_comments = chain_comment_totals.get(chain_id, 0)
+            total_comments = lineage_comment_totals.get(lineage_id, 0)
             label_with_count = f"{label} ({total_comments})"
             label_font_weight = (
                 "bold" if total_comments > N_COMMENTS_FOR_BOLD else "normal"
@@ -969,6 +990,7 @@ def create_clean_evolution_visualization_with_labels(
                     edgecolor="gray",  # Changed from 'red' to 'gray'
                     alpha=0.5,
                 ),
+                zorder=6,
             )  # Reduced alpha for subtler appearance
 
     # Draw connections
