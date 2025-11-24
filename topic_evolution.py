@@ -121,36 +121,74 @@ for month_str in sorted(monthly_data.keys()):
     # maximum feature count and n-gram range influences how granularly phrases are
     # captured, which in turn affects how cohesive and distinguishable the resulting
     # topics become.
-    if n_docs < 100:
-        min_df_value = 2
-    elif n_docs < 500:
-        min_df_value = 3
-    elif n_docs < 1000:
-        min_df_value = 5
-    else:
-        min_df_value = 10
 
-    # Keep the 0.95 cap but convert it to an absolute document ceiling that is
-    # never below min_df, so CountVectorizer always receives compatible integer
-    # thresholds (avoiding "max_df corresponds to < documents than min_df").
-    max_df_ratio = 0.95
-    max_df_docs = int(np.floor(max_df_ratio * n_docs))
-    max_df_docs = max(max_df_docs, min_df_value)
-    max_df_value = max_df_docs
+    def derive_vectorizer_thresholds(texts, n_docs):
+        # Start with the adaptive mins used previously, but be willing to relax them if
+        # the vocabulary would be emptied by pruning.
+        if n_docs < 100:
+            min_df_value = 2
+        elif n_docs < 500:
+            min_df_value = 3
+        elif n_docs < 1000:
+            min_df_value = 5
+        else:
+            min_df_value = 10
 
-    print(
-        "    Vectorizer thresholds -> min_df: "
-        f"{min_df_value} docs, max_df: {max_df_docs} docs "
-        f"(derived from ratio {max_df_ratio})"
-    )
+        max_df_ratio = 0.95
+        fallback_used = False
 
-    vectorizer_model = CountVectorizer(
-        ngram_range=(1, 1),
-        min_df=min_df_value,
-        max_df=max_df_value,
-        max_features=10000,
-        stop_words="english",
-    )
+        while True:
+            max_df_docs = int(np.floor(max_df_ratio * n_docs))
+            max_df_docs = max(max_df_docs, min_df_value)
+
+            tester = CountVectorizer(
+                ngram_range=(1, 1),
+                min_df=min_df_value,
+                max_df=max_df_docs,
+                max_features=10000,
+                stop_words="english",
+            )
+
+            try:
+                tester.fit(texts)
+                vocab_size = len(tester.vocabulary_)
+                if vocab_size == 0:
+                    raise ValueError("Empty vocabulary after pruning")
+                break
+            except ValueError as e:
+                # Relax thresholds if pruning wipes out the vocabulary.
+                fallback_used = True
+                if min_df_value > 1:
+                    min_df_value = max(1, min_df_value // 2)
+                    continue
+                if max_df_ratio < 1.0:
+                    max_df_ratio = 1.0
+                    continue
+                # Cannot relax further; re-raise to skip this month gracefully.
+                raise e
+
+        log_msg = (
+            f"    Vectorizer thresholds -> min_df: {min_df_value} docs, "
+            f"max_df: {max_df_docs} docs (derived from ratio {max_df_ratio})"
+        )
+        if fallback_used:
+            log_msg += " [adjusted to retain vocabulary]"
+        print(log_msg)
+
+        vectorizer = CountVectorizer(
+            ngram_range=(1, 1),
+            min_df=min_df_value,
+            max_df=max_df_docs,
+            max_features=10000,
+            stop_words="english",
+        )
+        return vectorizer
+
+    try:
+        vectorizer_model = derive_vectorizer_thresholds(texts, n_docs)
+    except ValueError as e:
+        print(f"  ❌ Error deriving vectorizer thresholds: {e}")
+        continue
 
     # Larger values merge narrow clusters so fewer, broader topics emerge; smaller values
     # allow more granular topics at the risk of over-fragmentation. Raising these bounds
@@ -599,7 +637,16 @@ N_COMMENTS_FOR_BOLD = 1000  # Topics exceeding this total comment count render l
         y_position = 0
         split_info = []
 
+        def prune_short_branches(part):
+            retained = []
+            for branch in part["branches"]:
+                prune_short_branches(branch)
+                if network.calculate_chain_longevity(branch) >= 2:
+                    retained.append(branch)
+            part["branches"] = retained
+
         for chain in chains:
+            prune_short_branches(chain)
             if network.calculate_chain_longevity(chain) < 2:
                 continue
 
