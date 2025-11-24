@@ -16,8 +16,10 @@ import pickle
 from bertopic import BERTopic
 from sentence_transformers import SentenceTransformer
 from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 from umap import UMAP
 from hdbscan import HDBSCAN
+import re
 
 warnings.filterwarnings("ignore")
 
@@ -74,10 +76,39 @@ print("\n" + "=" * 60)
 print("RUNNING TOPIC MODELING WITH HDBSCAN")
 print("=" * 60)
 
+
+def filter_low_information_texts(texts, min_tokens=3):
+    """
+    Remove comments that lack enough informative tokens to survive vectorization.
+    This reduces empty-vocabulary failures caused by tiny batches, repetitive
+    text, or stopword-heavy content by enforcing a floor on non-stopword tokens
+    per comment.
+    """
+
+    filtered = []
+    dropped = 0
+    for text in texts:
+        tokens = [
+            tok
+            for tok in re.findall(r"\b\w+\b", str(text).lower())
+            if tok not in ENGLISH_STOP_WORDS
+        ]
+        if len(tokens) >= min_tokens:
+            filtered.append(" ".join(tokens))
+        else:
+            dropped += 1
+    return filtered, dropped
+
 for month_str in sorted(monthly_data.keys()):
     print(f"\nProcessing month: {month_str}")
     month_df = monthly_data[month_str]
     texts = month_df["processed_text"].tolist()
+
+    texts, dropped = filter_low_information_texts(texts)
+    if dropped:
+        print(
+            f"  ⚠️ Filtered {dropped} low-information comments (<{3} non-stopword tokens)"
+        )
 
     if len(texts) < 10:
         print(f"  ⚠️ Skipping {month_str}: Only {len(texts)} comments")
