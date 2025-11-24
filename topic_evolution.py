@@ -750,8 +750,11 @@ def create_clean_evolution_visualization_with_labels(
                 is_branch=False,
                 branch_index=0,
                 lineage_id=None,
+                parent_doc_count=None,
             ):
                 nonlocal y_position
+
+                branch_inherits_parent_label = False
 
                 for i, node in enumerate(part["nodes"]):
                     key = (node["month"], node["topic_id"])
@@ -801,7 +804,18 @@ def create_clean_evolution_visualization_with_labels(
                         "branch_index": branch_index if is_branch else -1,
                         "doc_count": doc_count,
                         "is_ephemeral": doc_count <= EPHEMERAL_DOC_COUNT,
+                        "suppress_label": False,
                     }
+
+                    if is_branch and i == 0 and parent_doc_count is not None:
+                        # If the branch inherits the same volume as the split parent,
+                        # treat it as the same topic for labeling and hide the child
+                        # label to avoid duplicate names.
+                        if doc_count == parent_doc_count:
+                            branch_inherits_parent_label = True
+                            layout[key]["suppress_label"] = True
+                    elif is_branch:
+                        layout[key]["suppress_label"] = branch_inherits_parent_label
 
                     if is_split:
                         split_info.append(
@@ -828,6 +842,13 @@ def create_clean_evolution_visualization_with_labels(
                             is_branch=True,
                             branch_index=idx,
                             lineage_id=branch_lineage,
+                            parent_doc_count=layout.get(
+                                (
+                                    part["nodes"][-1]["month"],
+                                    part["nodes"][-1]["topic_id"],
+                                ),
+                                {},
+                            ).get("doc_count"),
                         )
                 return y_pos
 
@@ -892,6 +913,9 @@ def create_clean_evolution_visualization_with_labels(
         )
 
         # Add labels
+        if info.get("suppress_label"):
+            continue
+
         if (
             month in monthly_representations
             and topic_id in monthly_representations[month]
