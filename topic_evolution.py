@@ -125,6 +125,11 @@ for month_str in sorted(monthly_data.keys()):
     def derive_vectorizer_thresholds(texts, n_docs):
         # Start with the adaptive mins used previously, but be willing to relax them if
         # the vocabulary would be emptied by pruning.
+        # Empty vocabularies occur when preprocessing plus aggressive min_df/max_df cuts
+        # remove every token—for example, very small monthly batches, highly repetitive
+        # text, or spikes in stopwords can leave no terms after pruning. The guard
+        # below progressively relaxes thresholds to keep at least one token so the
+        # vectorizer stays usable.
         if n_docs < 100:
             min_df_value = 2
         elif n_docs < 500:
