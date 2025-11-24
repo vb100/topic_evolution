@@ -217,42 +217,68 @@ for month_str in sorted(monthly_data.keys()):
 
     try:
         topics, probs = topic_model.fit_transform(texts)
-        topic_info = topic_model.get_topic_info()
+    except ValueError as e:
+        if "After pruning, no terms remain" in str(e):
+            print("  ⚠️ Retrying with relaxed vectorizer thresholds (min_df=1, max_df=1.0)")
 
-        n_outliers = (np.array(topics) == -1).sum()
-        outlier_percentage = (n_outliers / len(topics)) * 100
+            relaxed_vectorizer = CountVectorizer(
+                ngram_range=(1, 1),
+                min_df=1,
+                max_df=1.0,
+                max_features=10000,
+                stop_words="english",
+            )
 
-        monthly_outliers[month_str] = {
-            "count": n_outliers,
-            "percentage": outlier_percentage,
-            "outlier_texts": [texts[i] for i, t in enumerate(topics) if t == -1][:10],
-        }
+            topic_model = BERTopic(
+                embedding_model=embedding_model,
+                umap_model=umap_model,
+                hdbscan_model=hdbscan_model,
+                vectorizer_model=relaxed_vectorizer,
+                min_topic_size=min_topic_size_value,
+                nr_topics=25,
+                calculate_probabilities=False,
+                verbose=False,
+            )
 
-        # Get topic representations
-        topic_representations = {}
-        for topic_id in topic_info["Topic"].unique():
-            if topic_id != -1:
-                topic_words = topic_model.get_topic(topic_id)
-                topic_representations[topic_id] = {
-                    "words": [word for word, score in topic_words[:10]],
-                    "scores": [score for word, score in topic_words[:10]],
-                }
-
-        monthly_topics[month_str] = {
-            "model": topic_model,
-            "topics": topics,
-            "documents": texts,
-        }
-        monthly_topic_info[month_str] = topic_info
-        monthly_topic_representations[month_str] = topic_representations
-
-        n_topics = len(topic_info) - 1
-        print(f"  ✓ Found {n_topics} topics")
-        print(f"  ✓ Outliers: {n_outliers} ({outlier_percentage:.1f}%)")
-
+            topics, probs = topic_model.fit_transform(texts)
+        else:
+            raise
     except Exception as e:
         print(f"  ❌ Error: {str(e)}")
         continue
+
+    topic_info = topic_model.get_topic_info()
+
+    n_outliers = (np.array(topics) == -1).sum()
+    outlier_percentage = (n_outliers / len(topics)) * 100
+
+    monthly_outliers[month_str] = {
+        "count": n_outliers,
+        "percentage": outlier_percentage,
+        "outlier_texts": [texts[i] for i, t in enumerate(topics) if t == -1][:10],
+    }
+
+    # Get topic representations
+    topic_representations = {}
+    for topic_id in topic_info["Topic"].unique():
+        if topic_id != -1:
+            topic_words = topic_model.get_topic(topic_id)
+            topic_representations[topic_id] = {
+                "words": [word for word, score in topic_words[:10]],
+                "scores": [score for word, score in topic_words[:10]],
+            }
+
+    monthly_topics[month_str] = {
+        "model": topic_model,
+        "topics": topics,
+        "documents": texts,
+    }
+    monthly_topic_info[month_str] = topic_info
+    monthly_topic_representations[month_str] = topic_representations
+
+    n_topics = len(topic_info) - 1
+    print(f"  ✓ Found {n_topics} topics")
+    print(f"  ✓ Outliers: {n_outliers} ({outlier_percentage:.1f}%)")
 
 # ============================================================================
 # STEP 2: CALCULATE TOPIC EVOLUTION
