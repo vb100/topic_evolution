@@ -729,6 +729,7 @@ def create_clean_evolution_visualization_with_labels(
         y_position = 0
         split_info = []
         lineage_counter = defaultdict(int)
+        suppressed_lineages = set()
 
         def prune_short_branches(part):
             retained = []
@@ -814,6 +815,8 @@ def create_clean_evolution_visualization_with_labels(
                         if doc_count == parent_doc_count:
                             branch_inherits_parent_label = True
                             layout[key]["suppress_label"] = True
+                            if lineage_id:
+                                suppressed_lineages.add(lineage_id)
                     elif is_branch:
                         layout[key]["suppress_label"] = branch_inherits_parent_label
 
@@ -855,9 +858,9 @@ def create_clean_evolution_visualization_with_labels(
             process_chain_part(chain, y_position, lineage_id=chain["chain_id"])
             y_position += 1
 
-        return layout, y_position, split_info
+        return layout, y_position, split_info, suppressed_lineages
 
-    layout, total_rows, split_info = calculate_layout(chains)
+    layout, total_rows, split_info, suppressed_lineages = calculate_layout(chains)
 
     if not layout:
         print("No chains to visualize")
@@ -913,7 +916,7 @@ def create_clean_evolution_visualization_with_labels(
         )
 
         # Add labels
-        if info.get("suppress_label"):
+        if info.get("suppress_label") or info.get("lineage_id") in suppressed_lineages:
             continue
 
         if (
