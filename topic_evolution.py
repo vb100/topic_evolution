@@ -134,6 +134,10 @@ for month_str in sorted(monthly_data.keys()):
         if max_df_docs < min_df_value:
             min_df_value = max(1, int(max_df_docs) if max_df_docs else 1)
 
+    print(
+        f"    Vectorizer thresholds -> min_df: {min_df_value}, max_df: {max_df_value}"
+    )
+
     vectorizer_model = CountVectorizer(
         ngram_range=(1, 1),
         min_df=min_df_value,
