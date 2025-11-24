@@ -398,6 +398,8 @@ for i in range(len(sorted_months) - 1):
     similarity_matrix = calculate_topic_similarity(topics1, topics2)
 
     connections = []
+    STRONG_CONNECTION_THRESHOLD = 0.28
+
     for t1_idx, t1_id in enumerate(topics1.keys()):
         for t2_idx, t2_id in enumerate(topics2.keys()):
             sim = similarity_matrix[t1_idx, t2_idx]
@@ -407,7 +409,7 @@ for i in range(len(sorted_months) - 1):
                         "from_topic": t1_id,
                         "to_topic": t2_id,
                         "similarity": sim,
-                        "strong_connection": sim >= 0.32,
+                        "strong_connection": sim >= STRONG_CONNECTION_THRESHOLD,
                     }
                 )
 
@@ -601,7 +603,7 @@ print("=" * 60)
 network = ImprovedTopicEvolutionNetwork(
     monthly_representations=monthly_topic_representations,
     topic_evolution=topic_evolution,
-    similarity_threshold=0.32,
+    similarity_threshold=0.28,
     min_branch_length=1,
 )
 
@@ -706,11 +708,11 @@ for month in sorted(monthly_topic_representations.keys()):
 # ============================================================================
 # STEP 5: CREATE FINAL VISUALIZATION (WITH YOUR IMPROVEMENTS)
 # ============================================================================
-EDGE_SIM_PLOT_THRESHOLD = 0.38  # Raises/lowers how many moderate links are drawn; higher values reduce clutter but hide weaker ties.
+EDGE_SIM_PLOT_THRESHOLD = 0.30  # Raises/lowers how many moderate links are drawn; higher values reduce clutter but hide weaker ties.
 # Graph linking thresholds
-TOPIC_EMB_SIM_THRESHOLD = 0.35  # Embedding similarity needed to treat topics as related; higher tightens merges, lower may over-connect.
-DOC_TO_PREV_TOPIC_THRESHOLD = 0.40  # Minimum doc overlap to keep a topic lineage; increasing it prunes noisy continuations.
-BRIDGING_THRESHOLD = 0.40  # Strong link cutoff for “bridge” edges; lowering shows more strong ties, raising highlights only the most robust.
+TOPIC_EMB_SIM_THRESHOLD = 0.33  # Embedding similarity needed to treat topics as related; higher tightens merges, lower may over-connect.
+DOC_TO_PREV_TOPIC_THRESHOLD = 0.36  # Minimum doc overlap to keep a topic lineage; increasing it prunes noisy continuations.
+BRIDGING_THRESHOLD = 0.34  # Strong link cutoff for “bridge” edges; lowering shows more strong ties, raising highlights only the most robust.
 TOP_TERM_COUNT = 10  # Number of top words retained per topic; more terms add nuance but can dilute clarity.
 EPHEMERAL_DOC_COUNT = 6  # Topics with counts at/below this are treated as fleeting; smaller values keep more short-lived nodes visible.
 ROW_SPACING = 1.25
