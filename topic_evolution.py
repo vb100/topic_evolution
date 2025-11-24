@@ -87,9 +87,13 @@ for month_str in sorted(monthly_data.keys()):
 
     # Configure HDBSCAN with adaptive parameters
     hdbscan_model = HDBSCAN(
-        # Slightly lower the floor and proportional scaling to avoid a single
-        # dominant cluster and encourage more balanced topic sizes.
+        # min_cluster_size defines the smallest grouping HDBSCAN will accept as a
+        # topic; higher values merge nearby points so you get fewer, broader topics,
+        # while lower values allow more granular topics at the risk of extra noise.
         min_cluster_size=max(40, min(120, int(n_docs * 0.05))),
+        # min_samples sets how strictly HDBSCAN distinguishes dense clusters from
+        # noise; raising it yields sturdier clusters but more outliers, whereas
+        # lowering it keeps more points in clusters but can blur topic boundaries.
         min_samples=min(30, max(8, int(n_docs * 0.015))),
         metric="euclidean",
         cluster_selection_method="eom",
