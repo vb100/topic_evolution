@@ -407,7 +407,7 @@ for i in range(len(sorted_months) - 1):
                         "from_topic": t1_id,
                         "to_topic": t2_id,
                         "similarity": sim,
-                        "strong_connection": sim >= 0.35,
+                        "strong_connection": sim >= 0.32,
                     }
                 )
 
@@ -601,7 +601,7 @@ print("=" * 60)
 network = ImprovedTopicEvolutionNetwork(
     monthly_representations=monthly_topic_representations,
     topic_evolution=topic_evolution,
-    similarity_threshold=0.35,
+    similarity_threshold=0.32,
     min_branch_length=1,
 )
 
@@ -706,11 +706,11 @@ for month in sorted(monthly_topic_representations.keys()):
 # ============================================================================
 # STEP 5: CREATE FINAL VISUALIZATION (WITH YOUR IMPROVEMENTS)
 # ============================================================================
-EDGE_SIM_PLOT_THRESHOLD = 0.42  # Raises/lowers how many moderate links are drawn; higher values reduce clutter but hide weaker ties.
+EDGE_SIM_PLOT_THRESHOLD = 0.38  # Raises/lowers how many moderate links are drawn; higher values reduce clutter but hide weaker ties.
 # Graph linking thresholds
 TOPIC_EMB_SIM_THRESHOLD = 0.35  # Embedding similarity needed to treat topics as related; higher tightens merges, lower may over-connect.
 DOC_TO_PREV_TOPIC_THRESHOLD = 0.40  # Minimum doc overlap to keep a topic lineage; increasing it prunes noisy continuations.
-BRIDGING_THRESHOLD = 0.45  # Strong link cutoff for “bridge” edges; lowering shows more strong ties, raising highlights only the most robust.
+BRIDGING_THRESHOLD = 0.40  # Strong link cutoff for “bridge” edges; lowering shows more strong ties, raising highlights only the most robust.
 TOP_TERM_COUNT = 10  # Number of top words retained per topic; more terms add nuance but can dilute clarity.
 EPHEMERAL_DOC_COUNT = 6  # Topics with counts at/below this are treated as fleeting; smaller values keep more short-lived nodes visible.
 ROW_SPACING = 1.25
@@ -1038,6 +1038,9 @@ def create_clean_evolution_visualization_with_labels(
     ax.grid(True, axis="x", alpha=0.3, linestyle="--")
     ax.set_axisbelow(True)
 
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
     legend_elements = [
         plt.Line2D(
             [0],
@@ -1086,7 +1089,12 @@ def create_clean_evolution_visualization_with_labels(
         ),
     ]
 
-    ax.legend(handles=legend_elements, loc="upper right", framealpha=0.95, fontsize=9)
+    ax.legend(
+        handles=legend_elements,
+        loc="upper left",
+        framealpha=0.95,
+        fontsize=9,
+    )
 
     # IMPROVEMENT 2: Adjust bottom margin to prevent x-axis cutoff
     plt.tight_layout()
