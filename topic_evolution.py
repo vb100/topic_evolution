@@ -90,14 +90,17 @@ for month_str in sorted(monthly_data.keys()):
         # min_cluster_size defines the smallest grouping HDBSCAN will accept as a
         # topic; higher values merge nearby points so you get fewer, broader topics,
         # while lower values allow more granular topics at the risk of extra noise.
-        min_cluster_size=max(40, min(120, int(n_docs * 0.05))),
+        # Bumping this upward reduces the total topic count per month.
+        min_cluster_size=max(80, min(200, int(n_docs * 0.08))),
         # min_samples sets how strictly HDBSCAN distinguishes dense clusters from
         # noise; raising it yields sturdier clusters but more outliers, whereas
         # lowering it keeps more points in clusters but can blur topic boundaries.
-        min_samples=min(30, max(8, int(n_docs * 0.015))),
+        # Increasing this in tandem with min_cluster_size prunes fragile clusters so
+        # the surviving topics cover more comments each.
+        min_samples=min(40, max(12, int(n_docs * 0.02))),
         metric="euclidean",
         cluster_selection_method="eom",
-        cluster_selection_epsilon=0.1,
+        cluster_selection_epsilon=0.05,
         prediction_data=True,
     )
 
@@ -153,10 +156,9 @@ for month_str in sorted(monthly_data.keys()):
     )
 
     # Larger values merge narrow clusters so fewer, broader topics emerge; smaller values
-    # allow more granular topics at the risk of over-fragmentation. Lowering these bounds
-    # slightly reduces the chance of a single massive topic by allowing large clusters to
-    # split into multiple, more evenly sized topics.
-    min_topic_size_value = max(30, min(100, int(n_docs * 0.04)))
+    # allow more granular topics at the risk of over-fragmentation. Raising these bounds
+    # favors a compact set of high-coverage topics instead of many tiny ones.
+    min_topic_size_value = max(60, min(180, int(n_docs * 0.08)))
 
     # Create BERTopic model
     topic_model = BERTopic(
@@ -165,7 +167,10 @@ for month_str in sorted(monthly_data.keys()):
         hdbscan_model=hdbscan_model,
         vectorizer_model=vectorizer_model,
         min_topic_size=min_topic_size_value,
-        nr_topics="auto",
+        # Constrain the per-month topic set toward a compact range (roughly 20–25)
+        # to emphasize the most dominant themes while discouraging excessive
+        # fragmentation.
+        nr_topics=25,
         calculate_probabilities=False,
         verbose=False,
     )
