@@ -87,8 +87,8 @@ for month_str in sorted(monthly_data.keys()):
 
     # Configure HDBSCAN with adaptive parameters
     hdbscan_model = HDBSCAN(
-        min_cluster_size=max(40, min(100, int(n_docs * 0.05))),
-        min_samples=min(25, max(5, int(n_docs * 0.01))),
+        min_cluster_size=max(60, min(150, int(n_docs * 0.08))),
+        min_samples=min(35, max(10, int(n_docs * 0.02))),
         metric="euclidean",
         cluster_selection_method="eom",
         cluster_selection_epsilon=0.1,
@@ -105,6 +105,13 @@ for month_str in sorted(monthly_data.keys()):
     )
 
     # Configure vectorizer
+    # The vectorizer controls how raw text is converted into token counts that feed the
+    # topic model. Tuning the document frequency thresholds helps balance vocabulary
+    # richness against noise: lower values keep rare but meaningful terms, while higher
+    # values filter out infrequent words that can fragment topics. Adjusting the
+    # maximum feature count and n-gram range influences how granularly phrases are
+    # captured, which in turn affects how cohesive and distinguishable the resulting
+    # topics become.
     if n_docs < 100:
         min_df_value = 2
     elif n_docs < 500:
@@ -114,15 +121,23 @@ for month_str in sorted(monthly_data.keys()):
     else:
         min_df_value = 10
 
+    max_df_value = 0.95
+    if max_df_value * n_docs < min_df_value:
+        max_df_value = 1.0
+        if max_df_value * n_docs < min_df_value:
+            min_df_value = 1
+
     vectorizer_model = CountVectorizer(
         ngram_range=(1, 1),
         min_df=min_df_value,
-        max_df=0.95,
+        max_df=max_df_value,
         max_features=10000,
         stop_words="english",
     )
 
-    min_topic_size_value = max(23, min(50, int(n_docs * 0.03)))
+    # Larger values merge narrow clusters so fewer, broader topics emerge; smaller values
+    # allow more granular topics at the risk of over-fragmentation.
+    min_topic_size_value = max(40, min(80, int(n_docs * 0.06)))
 
     # Create BERTopic model
     topic_model = BERTopic(
@@ -218,7 +233,7 @@ print("\n" + "=" * 60)
 print("CALCULATING TOPIC EVOLUTION")
 print("=" * 60)
 
-topic_evolution = {}
+topic_evolution = {}  # Stores month-to-month topic linkages that drive split/merge detection
 sorted_months = sorted(monthly_topic_representations.keys())
 
 for i in range(len(sorted_months) - 1):
@@ -245,7 +260,7 @@ for i in range(len(sorted_months) - 1):
                         "from_topic": t1_id,
                         "to_topic": t2_id,
                         "similarity": sim,
-                        "strong_connection": sim >= 0.5,
+                        "strong_connection": sim >= 0.35,
                     }
                 )
 
@@ -272,7 +287,13 @@ class ImprovedTopicEvolutionNetwork:
     ):
         self.monthly_representations = monthly_representations
         self.topic_evolution = topic_evolution
+        # similarity_threshold: minimum edge similarity for a topic to continue; lowering it
+        # connects loosely related topics and increases merges/splits, while raising it
+        # enforces stricter continuity and yields cleaner but fewer transitions.
         self.similarity_threshold = similarity_threshold
+        # min_branch_length: shortest allowed offshoot; smaller values keep short-lived
+        # branches visible (more splits), larger values suppress brief detours for a
+        # cleaner mainline.
         self.min_branch_length = min_branch_length
         self.graph = nx.DiGraph()
         self.chains = []
@@ -433,8 +454,8 @@ print("=" * 60)
 network = ImprovedTopicEvolutionNetwork(
     monthly_representations=monthly_topic_representations,
     topic_evolution=topic_evolution,
-    similarity_threshold=0.5,
-    min_branch_length=2,
+    similarity_threshold=0.35,
+    min_branch_length=1,
 )
 
 graph = network.build_evolution_graph()
@@ -538,18 +559,20 @@ for month in sorted(monthly_topic_representations.keys()):
 # ============================================================================
 # STEP 5: CREATE FINAL VISUALIZATION (WITH YOUR IMPROVEMENTS)
 # ============================================================================
-EDGE_SIM_PLOT_THRESHOLD = 0.42  # only plot edges with sim >= this
+EDGE_SIM_PLOT_THRESHOLD = 0.42  # Raises/lowers how many moderate links are drawn; higher values reduce clutter but hide weaker ties.
 # Graph linking thresholds
-TOPIC_EMB_SIM_THRESHOLD = 0.35
-DOC_TO_PREV_TOPIC_THRESHOLD = 0.40
-BRIDGING_THRESHOLD = 0.45
-TOP_TERM_COUNT = 10
-EPHEMERAL_DOC_COUNT = 6
+TOPIC_EMB_SIM_THRESHOLD = 0.35  # Embedding similarity needed to treat topics as related; higher tightens merges, lower may over-connect.
+DOC_TO_PREV_TOPIC_THRESHOLD = 0.40  # Minimum doc overlap to keep a topic lineage; increasing it prunes noisy continuations.
+BRIDGING_THRESHOLD = 0.45  # Strong link cutoff for “bridge” edges; lowering shows more strong ties, raising highlights only the most robust.
+TOP_TERM_COUNT = 10  # Number of top words retained per topic; more terms add nuance but can dilute clarity.
+EPHEMERAL_DOC_COUNT = 6  # Topics with counts at/below this are treated as fleeting; smaller values keep more short-lived nodes visible.
+ROW_SPACING = 1.25
+N_COMMENTS_FOR_BOLD = 1000  # Topics exceeding this total comment count render labels in bold to highlight highly discussed themes.
 
 
-def create_clean_evolution_visualization_with_labels(
-    network, chains, monthly_representations
-):
+    def create_clean_evolution_visualization_with_labels(
+        network, chains, monthly_representations
+    ):
     def calculate_layout(chains):
         layout = {}
         y_position = 0
@@ -600,8 +623,10 @@ def create_clean_evolution_visualization_with_labels(
                         if not topic_row.empty:
                             doc_count = topic_row.iloc[0]["Count"]
 
+                    y_coord = y_pos * ROW_SPACING
+
                     layout[key] = {
-                        "y": y_pos,
+                        "y": y_coord,
                         "chain_id": chain["chain_id"],
                         "type": node_type,
                         "words": node.get("words", []),
@@ -615,7 +640,7 @@ def create_clean_evolution_visualization_with_labels(
                         split_info.append(
                             {
                                 "key": key,
-                                "y": y_pos,
+                                "y": y_coord,
                                 "words": node.get("words", []),
                                 "n_branches": len(part["branches"]),
                             }
@@ -644,25 +669,15 @@ def create_clean_evolution_visualization_with_labels(
         print("No chains to visualize")
         return None
 
-    # Determine size scaling based on comment/doc counts so nodes encode volume
-    doc_counts = [info["doc_count"] for info in layout.values() if info["doc_count"] > 0]
-    if doc_counts:
-        min_doc_count = min(doc_counts)
-        max_doc_count = max(doc_counts)
-    else:
-        min_doc_count = max_doc_count = 0
-
-    def scaled_size(base_size, doc_count):
-        """Scale marker size smoothly between 0.65x and 1.45x of its base size."""
-        if max_doc_count == min_doc_count:
-            scale = 1.0
-        else:
-            normalized = (doc_count - min_doc_count) / (max_doc_count - min_doc_count)
-            scale = 0.65 + normalized * (1.45 - 0.65)
-        return base_size * scale
+    # Precompute total comment counts per chain across its lifetime
+    chain_comment_totals = defaultdict(int)
+    for info in layout.values():
+        if info["chain_id"] is not None:
+            chain_comment_totals[info["chain_id"]] += info.get("doc_count", 0)
 
     # IMPROVEMENT 2: Adjust figure size and margins for better x-axis visibility
-    fig, ax = plt.subplots(figsize=(20, max(10, total_rows * 0.5)))
+    total_height = max(1, total_rows) * ROW_SPACING
+    fig, ax = plt.subplots(figsize=(20, max(10, total_height * 0.5)))
 
     months = sorted(monthly_representations.keys())
     month_positions = {month: i for i, month in enumerate(months)}
@@ -687,25 +702,18 @@ def create_clean_evolution_visualization_with_labels(
         }
         marker, base_size = markers.get(info["type"], ("s", 140))
 
-        # Scale size by monthly comment volume to keep dense topics visually prominent
-        marker_size = scaled_size(base_size, info.get("doc_count", 0))
-
-        # Scale size by monthly comment volume to keep dense topics visually prominent
-        marker_size = scaled_size(base_size, info.get("doc_count", 0))
-
         node_color = color
         edge_width = 2 if info["type"] == "branch_start" else 1.5
 
         ax.scatter(
             x,
             y,
-            s=marker_size,
+            s=base_size,
             c=[node_color],
             marker=marker,
             edgecolors="black",
             linewidth=edge_width,
             zorder=5,
-            alpha=marker_alpha,
         )
 
         # Add labels
@@ -722,26 +730,34 @@ def create_clean_evolution_visualization_with_labels(
             if len(label) > 55:
                 label = label[:52] + "..."
 
+            total_comments = chain_comment_totals.get(info["chain_id"], 0)
+            label_with_count = f"{label} ({total_comments})"
+            label_font_weight = (
+                "bold" if total_comments > N_COMMENTS_FOR_BOLD else "normal"
+            )
+
             if info["type"] == "start":
                 ax.text(
                     x - 0.1,
                     y,
-                    label,
+                    label_with_count,
                     fontsize=7,
                     ha="right",
                     va="center",
                     style="italic",
+                    fontweight=label_font_weight,
                     alpha=0.7,
                 )
             elif info["type"] == "branch_start":
                 y_offset = 0.15 if info["branch_index"] % 2 == 0 else -0.15
                 ax.annotate(
-                    f"→ {label}",
+                    f"→ {label_with_count}",
                     xy=(x, y),
                     xytext=(x + 0.3, y + y_offset),
                     fontsize=7,
                     color="black",
                     style="italic",
+                    fontweight=label_font_weight,
                     alpha=0.9,
                     arrowprops=dict(
                         arrowstyle="->",
@@ -756,6 +772,7 @@ def create_clean_evolution_visualization_with_labels(
         month, topic_id = split["key"]
         x = month_positions[month]
         y = split["y"]
+        chain_id = layout.get(split["key"], {}).get("chain_id")
 
         if (
             month in monthly_representations
@@ -770,18 +787,24 @@ def create_clean_evolution_visualization_with_labels(
             if len(label) > 55:
                 label = label[:52] + "..."
 
+            total_comments = chain_comment_totals.get(chain_id, 0)
+            label_with_count = f"{label} ({total_comments})"
+            label_font_weight = (
+                "bold" if total_comments > N_COMMENTS_FOR_BOLD else "normal"
+            )
+
             # IMPROVEMENT 3: Changed color from 'red' to 'black', keeping italic style
             ax.text(
                 x,
                 y + 0.3,
-                f"SPLIT: {label}",
+                f"SPLIT: {label_with_count}",
                 fontsize=7,
                 ha="center",
                 va="bottom",
                 style="italic",  # Keep italic style like other labels
                 color="black",  # Changed from 'red' to 'black'
                 alpha=0.7,  # Reduced from 0.8 to match other labels
-                fontweight="normal",  # Changed from 'bold' to 'normal'
+                fontweight=label_font_weight,
                 bbox=dict(
                     boxstyle="round,pad=0.2",
                     facecolor="white",
@@ -846,7 +869,7 @@ def create_clean_evolution_visualization_with_labels(
             )
 
     ax.set_xlim(-1.5, len(months))
-    ax.set_ylim(-1, total_rows + 1)
+    ax.set_ylim(-ROW_SPACING, total_height + ROW_SPACING)
     ax.set_xticks(range(len(months)))
 
     # IMPROVEMENT 2: Better x-axis label formatting
