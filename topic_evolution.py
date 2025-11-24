@@ -153,7 +153,7 @@ for month_str in sorted(monthly_data.keys()):
     # captured, which in turn affects how cohesive and distinguishable the resulting
     # topics become.
 
-    def derive_vectorizer_thresholds(texts, n_docs):
+def derive_vectorizer_thresholds(texts, n_docs):
         # Start with the adaptive mins used previously, but be willing to relax them if
         # the vocabulary would be emptied by pruning.
         # Empty vocabularies occur when preprocessing plus aggressive min_df/max_df cuts
@@ -162,21 +162,44 @@ for month_str in sorted(monthly_data.keys()):
         # below progressively relaxes thresholds to keep at least one token so the
         # vectorizer stays usable.
         if n_docs < 100:
-            min_df_value = 2
+            base_min_df = 2
         elif n_docs < 500:
-            min_df_value = 3
+            base_min_df = 3
         elif n_docs < 1000:
-            min_df_value = 5
+            base_min_df = 5
         else:
-            min_df_value = 10
+            base_min_df = 10
 
         max_df_ratio = 0.95
+
+        # Probe the raw token document frequencies to avoid choosing a min_df that
+        # would eliminate every term (e.g., when no token appears base_min_df times).
+        probe_vectorizer = CountVectorizer(
+            ngram_range=(1, 1),
+            min_df=1,
+            max_df=1.0,
+            max_features=10000,
+            stop_words="english",
+        )
+
+        probe_vectorizer.fit(texts)
+        probe_matrix = probe_vectorizer.transform(texts)
+        doc_freqs = np.asarray(probe_matrix.astype(bool).sum(axis=0)).ravel()
+
+        if doc_freqs.size == 0:
+            raise ValueError("Empty vocabulary after probing")
+
+        max_doc_freq = int(doc_freqs.max())
+
+        min_df_value = min(base_min_df, max_doc_freq)
+        min_df_value = max(min_df_value, 1)
+
+        max_df_docs = int(np.floor(max_df_ratio * n_docs))
+        max_df_docs = max(max_df_docs, min_df_value)
+
         fallback_used = False
 
         while True:
-            max_df_docs = int(np.floor(max_df_ratio * n_docs))
-            max_df_docs = max(max_df_docs, min_df_value)
-
             tester = CountVectorizer(
                 ngram_range=(1, 1),
                 min_df=min_df_value,
@@ -191,17 +214,17 @@ for month_str in sorted(monthly_data.keys()):
                 if vocab_size == 0:
                     raise ValueError("Empty vocabulary after pruning")
                 break
-            except ValueError as e:
-                # Relax thresholds if pruning wipes out the vocabulary.
+            except ValueError:
                 fallback_used = True
+
                 if min_df_value > 1:
                     min_df_value = max(1, min_df_value // 2)
-                    continue
-                if max_df_ratio < 1.0:
-                    max_df_ratio = 1.0
-                    continue
-                # Cannot relax further; re-raise to skip this month gracefully.
-                raise e
+                elif max_df_docs < n_docs:
+                    max_df_docs = min(n_docs, max_df_docs + max(1, max_df_docs // 2))
+                else:
+                    # Cannot relax further; bail out so the caller can try the full
+                    # relaxed fallback later.
+                    raise
 
         log_msg = (
             f"    Vectorizer thresholds -> min_df: {min_df_value} docs, "
