@@ -87,8 +87,10 @@ for month_str in sorted(monthly_data.keys()):
 
     # Configure HDBSCAN with adaptive parameters
     hdbscan_model = HDBSCAN(
-        min_cluster_size=max(60, min(150, int(n_docs * 0.08))),
-        min_samples=min(35, max(10, int(n_docs * 0.02))),
+        # Slightly lower the floor and proportional scaling to avoid a single
+        # dominant cluster and encourage more balanced topic sizes.
+        min_cluster_size=max(40, min(120, int(n_docs * 0.05))),
+        min_samples=min(30, max(8, int(n_docs * 0.015))),
         metric="euclidean",
         cluster_selection_method="eom",
         cluster_selection_epsilon=0.1,
@@ -136,8 +138,10 @@ for month_str in sorted(monthly_data.keys()):
     )
 
     # Larger values merge narrow clusters so fewer, broader topics emerge; smaller values
-    # allow more granular topics at the risk of over-fragmentation.
-    min_topic_size_value = max(40, min(80, int(n_docs * 0.06)))
+    # allow more granular topics at the risk of over-fragmentation. Lowering these bounds
+    # slightly reduces the chance of a single massive topic by allowing large clusters to
+    # split into multiple, more evenly sized topics.
+    min_topic_size_value = max(30, min(100, int(n_docs * 0.04)))
 
     # Create BERTopic model
     topic_model = BERTopic(
