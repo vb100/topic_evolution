@@ -1210,6 +1210,80 @@ def create_clean_evolution_visualization_with_labels(
     plt.tight_layout()
     plt.subplots_adjust(bottom=0.08)  # Add extra space at bottom for x-axis labels
 
+    layout_data = {
+        "layout": layout,
+        "total_rows": total_rows,
+        "months": months,
+    }
+
+    return fig, layout_data
+
+
+def create_comment_count_overlay(layout_data):
+    """Create a simplified count-only visualization without merge/split edges."""
+
+    if not layout_data or not layout_data.get("layout"):
+        print("No nodes to visualize for comment count overlay")
+        return None
+
+    layout = layout_data["layout"]
+    total_rows = layout_data.get("total_rows", 0)
+    months = layout_data.get("months", [])
+    month_positions = {month: i for i, month in enumerate(months)}
+
+    total_height = max(1, total_rows) * ROW_SPACING
+    fig, ax = plt.subplots(figsize=(20, max(8, total_height * 0.45)))
+
+    markers = {
+        "start": ("o", 180),
+        "end": ("v", 180),
+        "split": ("s", 140),
+        "branch_start": ("o", 160),
+        "continue": ("s", 140),
+    }
+
+    for (month, _topic_id), info in layout.items():
+        x = month_positions.get(month)
+        y = info.get("y", 0)
+        marker, base_size = markers.get(info.get("type", "continue"), ("s", 140))
+
+        ax.scatter(
+            x,
+            y,
+            s=base_size,
+            c="white",
+            marker=marker,
+            edgecolors="black",
+            linewidth=1.5,
+            zorder=4,
+        )
+
+        ax.text(
+            x,
+            y,
+            str(info.get("doc_count", 0)),
+            ha="center",
+            va="center",
+            fontsize=7,
+            color="black",
+            fontweight="bold",
+            zorder=6,
+        )
+
+    ax.set_xlim(-1.5, len(months))
+    ax.set_ylim(-ROW_SPACING, total_height + ROW_SPACING)
+    ax.set_xticks(range(len(months)))
+    ax.set_xticklabels(months, rotation=45, ha="right", fontsize=9)
+    ax.set_yticks([])
+    ax.grid(True, axis="x", alpha=0.3, linestyle="--")
+    ax.set_axisbelow(True)
+
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
+    plt.tight_layout()
+    plt.subplots_adjust(bottom=0.08)
+
     return fig
 
 
@@ -1218,7 +1292,11 @@ print("\n" + "=" * 60)
 print("CREATING FINAL VISUALIZATION")
 print("=" * 60)
 
-fig = create_clean_evolution_visualization_with_labels(
+fig, layout_snapshot = create_clean_evolution_visualization_with_labels(
     network, filtered_chains, enhanced_monthly_representations
 )
 plt.show()
+
+comment_fig = create_comment_count_overlay(layout_snapshot)
+if comment_fig is not None:
+    plt.show()
