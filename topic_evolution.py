@@ -1279,6 +1279,13 @@ def create_comment_count_overlay(layout_data):
             fontsize=COUNT_NODE_FONT_SIZE,
             color="black",
             fontweight="bold",
+            bbox=dict(
+                boxstyle="round,pad=0.15",
+                facecolor="white",
+                edgecolor="black",
+                linewidth=0.5,
+                alpha=0.9,
+            ),
             zorder=6,
         )
 
