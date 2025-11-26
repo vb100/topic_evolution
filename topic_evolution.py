@@ -754,6 +754,8 @@ TOP_TERM_COUNT = 10
 EPHEMERAL_DOC_COUNT = 6
 ROW_SPACING = 1.25
 N_COMMENTS_FOR_BOLD = 1000  # Topics exceeding this total comment count render labels in bold to highlight highly discussed themes.
+COUNT_NODE_SIZE_SCALE = 1.25  # Scales the size of nodes in the count-only overlay to give text more room.
+COUNT_NODE_FONT_SIZE = 6  # Font size for centered comment totals inside overlay nodes.
 
 
 def create_clean_evolution_visualization_with_labels(
@@ -1210,10 +1212,20 @@ def create_clean_evolution_visualization_with_labels(
     plt.tight_layout()
     plt.subplots_adjust(bottom=0.08)  # Add extra space at bottom for x-axis labels
 
+    edge_pairs = []
+    for from_node, to_node in network.graph.edges():
+        from_month, from_topic = from_node.split("_")
+        to_month, to_topic = to_node.split("_")
+        from_key = (from_month, int(from_topic))
+        to_key = (to_month, int(to_topic))
+        if from_key in layout and to_key in layout:
+            edge_pairs.append((from_key, to_key))
+
     layout_data = {
         "layout": layout,
         "total_rows": total_rows,
         "months": months,
+        "edges": edge_pairs,
     }
 
     return fig, layout_data
@@ -1250,7 +1262,7 @@ def create_comment_count_overlay(layout_data):
         ax.scatter(
             x,
             y,
-            s=base_size,
+            s=base_size * COUNT_NODE_SIZE_SCALE,
             c="white",
             marker=marker,
             edgecolors="black",
@@ -1264,11 +1276,18 @@ def create_comment_count_overlay(layout_data):
             str(info.get("doc_count", 0)),
             ha="center",
             va="center",
-            fontsize=7,
+            fontsize=COUNT_NODE_FONT_SIZE,
             color="black",
             fontweight="bold",
             zorder=6,
         )
+
+    for from_key, to_key in layout_data.get("edges", []):
+        from_month, _ = from_key
+        to_month, _ = to_key
+        x1, y1 = month_positions[from_month], layout[from_key]["y"]
+        x2, y2 = month_positions[to_month], layout[to_key]["y"]
+        ax.plot([x1, x2], [y1, y2], color="black", linewidth=1.2, zorder=3)
 
     ax.set_xlim(-1.5, len(months))
     ax.set_ylim(-ROW_SPACING, total_height + ROW_SPACING)
