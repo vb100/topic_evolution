@@ -715,21 +715,21 @@ for month in sorted(monthly_topic_representations.keys()):
 #   Impact on nodes: Lower values densify the network around nodes, potentially crowding them; higher values declutter but can isolate nodes.
 #   Impact on merges/splits: Lower values reveal more candidate cross-month links, so splits/merges may appear more frequently; higher values hide borderline links.
 #   Impact on topic size/noise: Lower values can surface noisy or coincidental similarities; higher values emphasize only stronger relationships.
-#   Example: EDGE_SIM_PLOT_THRESHOLD = 0.5 would draw only edges with similarity ≥0.5, yielding a sparser, more conservative linkage set.
+#   Example: EDGE_SIM_PLOT_THRESHOLD = 0.5 would draw only edges with similarity ≥0.5, yielding a sparser, more conservative linkage set. Dropping it to 0.3 keeps weaker ties visible, promoting interconnections.
 EDGE_SIM_PLOT_THRESHOLD = 0.30
 
 # TOPIC_EMB_SIM_THRESHOLD: Embedding similarity required to treat topics as related when chaining.
 #   Impact on nodes: Lower values keep more nodes connected across months; higher values leave more isolated nodes.
 #   Impact on merges/splits: Lower values encourage merges and longer chains; higher values demand tighter semantic alignment, reducing split/merge events.
 #   Impact on topic size/noise: Lower values may mix nearby but distinct themes (more noise); higher values keep topics purer but may fragment them.
-#   Example: TOPIC_EMB_SIM_THRESHOLD = 0.50 would only link topics with cosine similarity ≥0.5, leading to fewer, stricter continuations.
+#   Example: TOPIC_EMB_SIM_THRESHOLD = 0.50 would only link topics with cosine similarity ≥0.5, leading to fewer, stricter continuations, while 0.33 favors longer-lived chains.
 TOPIC_EMB_SIM_THRESHOLD = 0.33
 
 # DOC_TO_PREV_TOPIC_THRESHOLD: Minimum document overlap to continue a topic lineage.
 #   Impact on nodes: Lower values keep nodes active even with modest shared comments; higher values prune nodes that do not share enough documents.
 #   Impact on merges/splits: Lower values increase chances of continuations/merges; higher values can terminate branches sooner, reducing splits.
 #   Impact on topic size/noise: Lower values risk carrying forward noisy or weakly related content; higher values ensure continuity reflects substantial audience overlap.
-#   Example: DOC_TO_PREV_TOPIC_THRESHOLD = 0.20 would let topics persist with only 20% overlap, extending chains but with looser cohesion.
+#   Example: DOC_TO_PREV_TOPIC_THRESHOLD = 0.20 would let topics persist with only 20% overlap, extending chains but with looser cohesion; 0.36 (current) prefers stronger overlap.
 DOC_TO_PREV_TOPIC_THRESHOLD = 0.36
 
 # BRIDGING_THRESHOLD: Similarity cutoff for strong “bridge” edges.
