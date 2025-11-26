@@ -710,13 +710,48 @@ for month in sorted(monthly_topic_representations.keys()):
 # ============================================================================
 # STEP 5: CREATE FINAL VISUALIZATION (WITH YOUR IMPROVEMENTS)
 # ============================================================================
-EDGE_SIM_PLOT_THRESHOLD = 0.30  # Raises/lowers how many moderate links are drawn; higher values reduce clutter but hide weaker ties.
-# Graph linking thresholds
-TOPIC_EMB_SIM_THRESHOLD = 0.33  # Embedding similarity needed to treat topics as related; higher tightens merges, lower may over-connect.
-DOC_TO_PREV_TOPIC_THRESHOLD = 0.36  # Minimum doc overlap to keep a topic lineage; increasing it prunes noisy continuations.
-BRIDGING_THRESHOLD = 0.34  # Strong link cutoff for “bridge” edges; lowering shows more strong ties, raising highlights only the most robust.
-TOP_TERM_COUNT = 10  # Number of top words retained per topic; more terms add nuance but can dilute clarity.
-EPHEMERAL_DOC_COUNT = 6  # Topics with counts at/below this are treated as fleeting; smaller values keep more short-lived nodes visible.
+# Graph linking thresholds and labeling knobs
+# EDGE_SIM_PLOT_THRESHOLD: Controls which moderate-strength edges are drawn between nodes.
+#   Impact on nodes: Lower values densify the network around nodes, potentially crowding them; higher values declutter but can isolate nodes.
+#   Impact on merges/splits: Lower values reveal more candidate cross-month links, so splits/merges may appear more frequently; higher values hide borderline links.
+#   Impact on topic size/noise: Lower values can surface noisy or coincidental similarities; higher values emphasize only stronger relationships.
+#   Example: EDGE_SIM_PLOT_THRESHOLD = 0.5 would draw only edges with similarity ≥0.5, yielding a sparser, more conservative linkage set.
+EDGE_SIM_PLOT_THRESHOLD = 0.30
+
+# TOPIC_EMB_SIM_THRESHOLD: Embedding similarity required to treat topics as related when chaining.
+#   Impact on nodes: Lower values keep more nodes connected across months; higher values leave more isolated nodes.
+#   Impact on merges/splits: Lower values encourage merges and longer chains; higher values demand tighter semantic alignment, reducing split/merge events.
+#   Impact on topic size/noise: Lower values may mix nearby but distinct themes (more noise); higher values keep topics purer but may fragment them.
+#   Example: TOPIC_EMB_SIM_THRESHOLD = 0.50 would only link topics with cosine similarity ≥0.5, leading to fewer, stricter continuations.
+TOPIC_EMB_SIM_THRESHOLD = 0.33
+
+# DOC_TO_PREV_TOPIC_THRESHOLD: Minimum document overlap to continue a topic lineage.
+#   Impact on nodes: Lower values keep nodes active even with modest shared comments; higher values prune nodes that do not share enough documents.
+#   Impact on merges/splits: Lower values increase chances of continuations/merges; higher values can terminate branches sooner, reducing splits.
+#   Impact on topic size/noise: Lower values risk carrying forward noisy or weakly related content; higher values ensure continuity reflects substantial audience overlap.
+#   Example: DOC_TO_PREV_TOPIC_THRESHOLD = 0.20 would let topics persist with only 20% overlap, extending chains but with looser cohesion.
+DOC_TO_PREV_TOPIC_THRESHOLD = 0.36
+
+# BRIDGING_THRESHOLD: Similarity cutoff for strong “bridge” edges.
+#   Impact on nodes: Lower values mark more edges as strong, visually reinforcing connectivity; higher values highlight only the most confident ties.
+#   Impact on merges/splits: Lower values can signal more opportunities for merges; higher values restrict visible bridges, focusing on solid continuations.
+#   Impact on topic size/noise: Lower values may admit noisy bridges; higher values keep only robust relationships, possibly shortening chains.
+#   Example: BRIDGING_THRESHOLD = 0.25 would classify many moderate edges as strong, thickening the network and inviting more merges.
+BRIDGING_THRESHOLD = 0.34
+
+# TOP_TERM_COUNT: Number of top words retained per topic for labeling.
+#   Impact on nodes: More terms add descriptive nuance to each node’s tooltip/label; fewer keep labels concise.
+#   Impact on merges/splits: Does not alter structure directly but richer terms can make split/merge interpretations clearer or noisier.
+#   Impact on topic size/noise: Higher counts may introduce peripheral terms (noise) into labels; lower counts focus on the core theme.
+#   Example: TOP_TERM_COUNT = 15 would show 15 key words per topic label, offering more detail but risking clutter.
+TOP_TERM_COUNT = 10
+
+# EPHEMERAL_DOC_COUNT: Counts at or below this are treated as fleeting topics.
+#   Impact on nodes: Lower values keep more tiny nodes visible; higher values suppress or flag very small topics.
+#   Impact on merges/splits: Higher values may hide small branches that could have split/merge signals; lower values will show them, possibly increasing perceived splits.
+#   Impact on topic size/noise: Lower thresholds retain noisy, low-volume topics; higher thresholds emphasize substantial topics and reduce speckle noise.
+#   Example: EPHEMERAL_DOC_COUNT = 20 would treat topics with ≤20 comments as ephemeral, reducing their prominence or inclusion.
+EPHEMERAL_DOC_COUNT = 6
 ROW_SPACING = 1.25
 N_COMMENTS_FOR_BOLD = 1000  # Topics exceeding this total comment count render labels in bold to highlight highly discussed themes.
 
